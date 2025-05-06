@@ -9,51 +9,173 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      api_logs: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          endpoint: string
+          error_message: string | null
+          id: string
+          processing_time_ms: number | null
+          request_payload: Json | null
+          response_data: Json | null
+          status: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          endpoint: string
+          error_message?: string | null
+          id?: string
+          processing_time_ms?: number | null
+          request_payload?: Json | null
+          response_data?: Json | null
+          status: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          endpoint?: string
+          error_message?: string | null
+          id?: string
+          processing_time_ms?: number | null
+          request_payload?: Json | null
+          response_data?: Json | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_logs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
           appointment_recurring: string | null
+          billed_amount: number | null
+          billing_notes: string | null
+          claim_claimmd_batch_id: string | null
+          claim_claimmd_id: string | null
+          claim_last_submission_date: string | null
+          claim_response_json: Json | null
+          claim_status: string | null
+          claim_status_last_checked: string | null
           client_id: string
           clinician_id: string
+          cpt_code: string | null
           created_at: string
           date: string
+          denial_details_json: Json | null
+          diagnosis_code_pointers: string | null
           end_time: string
+          era_check_eft_number: string | null
+          era_claimmd_id: string | null
+          era_payment_date: string | null
           id: string
+          insurance_adjustment_amount: number | null
+          insurance_adjustment_details_json: Json | null
+          insurance_paid_amount: number | null
+          last_statement_to_patient_date: string | null
+          modifiers: string[] | null
           notes: string | null
+          patient_paid_amount: number | null
+          patient_payment_date: string | null
+          patient_payment_status: string | null
+          patient_responsibility_amount: number | null
+          place_of_service_code: string | null
           recurring_group_id: string | null
+          requires_billing_review: boolean | null
           start_time: string
           status: string
+          stripe_charge_ids: string[] | null
           type: string
           updated_at: string
           video_room_url: string | null
         }
         Insert: {
           appointment_recurring?: string | null
+          billed_amount?: number | null
+          billing_notes?: string | null
+          claim_claimmd_batch_id?: string | null
+          claim_claimmd_id?: string | null
+          claim_last_submission_date?: string | null
+          claim_response_json?: Json | null
+          claim_status?: string | null
+          claim_status_last_checked?: string | null
           client_id: string
           clinician_id: string
+          cpt_code?: string | null
           created_at?: string
           date: string
+          denial_details_json?: Json | null
+          diagnosis_code_pointers?: string | null
           end_time: string
+          era_check_eft_number?: string | null
+          era_claimmd_id?: string | null
+          era_payment_date?: string | null
           id?: string
+          insurance_adjustment_amount?: number | null
+          insurance_adjustment_details_json?: Json | null
+          insurance_paid_amount?: number | null
+          last_statement_to_patient_date?: string | null
+          modifiers?: string[] | null
           notes?: string | null
+          patient_paid_amount?: number | null
+          patient_payment_date?: string | null
+          patient_payment_status?: string | null
+          patient_responsibility_amount?: number | null
+          place_of_service_code?: string | null
           recurring_group_id?: string | null
+          requires_billing_review?: boolean | null
           start_time: string
           status?: string
+          stripe_charge_ids?: string[] | null
           type: string
           updated_at?: string
           video_room_url?: string | null
         }
         Update: {
           appointment_recurring?: string | null
+          billed_amount?: number | null
+          billing_notes?: string | null
+          claim_claimmd_batch_id?: string | null
+          claim_claimmd_id?: string | null
+          claim_last_submission_date?: string | null
+          claim_response_json?: Json | null
+          claim_status?: string | null
+          claim_status_last_checked?: string | null
           client_id?: string
           clinician_id?: string
+          cpt_code?: string | null
           created_at?: string
           date?: string
+          denial_details_json?: Json | null
+          diagnosis_code_pointers?: string | null
           end_time?: string
+          era_check_eft_number?: string | null
+          era_claimmd_id?: string | null
+          era_payment_date?: string | null
           id?: string
+          insurance_adjustment_amount?: number | null
+          insurance_adjustment_details_json?: Json | null
+          insurance_paid_amount?: number | null
+          last_statement_to_patient_date?: string | null
+          modifiers?: string[] | null
           notes?: string | null
+          patient_paid_amount?: number | null
+          patient_payment_date?: string | null
+          patient_payment_status?: string | null
+          patient_responsibility_amount?: number | null
+          place_of_service_code?: string | null
           recurring_group_id?: string | null
+          requires_billing_review?: boolean | null
           start_time?: string
           status?: string
+          stripe_charge_ids?: string[] | null
           type?: string
           updated_at?: string
           video_room_url?: string | null
@@ -480,6 +602,7 @@ export type Database = {
           client_policy_number_secondary: string | null
           client_policy_number_tertiary: string | null
           client_preferred_name: string | null
+          client_primary_payer_id: string | null
           client_primaryobjective: string | null
           client_privatenote: string | null
           client_problem: string | null
@@ -488,6 +611,7 @@ export type Database = {
           client_recentdischarge: string | null
           client_referral_source: string | null
           client_relationship: string | null
+          client_secondary_payer_id: string | null
           client_secondaryobjective: string | null
           client_self_goal: string | null
           client_sessionnarrative: string | null
@@ -506,6 +630,7 @@ export type Database = {
           client_substanceabuserisk: string | null
           client_suicidalideation: string | null
           client_temppassword: string | null
+          client_tertiary_payer_id: string | null
           client_tertiaryobjective: string | null
           client_thoughtprocess: string | null
           client_time_zone: string | null
@@ -523,8 +648,16 @@ export type Database = {
           client_tricare_sponsor_name: string | null
           client_vacoverage: string | null
           created_at: string
+          eligibility_claimmd_id_primary: string | null
+          eligibility_coinsurance_primary_percent: number | null
+          eligibility_copay_primary: number | null
+          eligibility_deductible_primary: number | null
+          eligibility_last_checked_primary: string | null
+          eligibility_response_details_primary_json: Json | null
+          eligibility_status_primary: string | null
           id: string
           role: Database["public"]["Enums"]["app_role"]
+          stripe_customer_id: string | null
           updated_at: string
         }
         Insert: {
@@ -578,6 +711,7 @@ export type Database = {
           client_policy_number_secondary?: string | null
           client_policy_number_tertiary?: string | null
           client_preferred_name?: string | null
+          client_primary_payer_id?: string | null
           client_primaryobjective?: string | null
           client_privatenote?: string | null
           client_problem?: string | null
@@ -586,6 +720,7 @@ export type Database = {
           client_recentdischarge?: string | null
           client_referral_source?: string | null
           client_relationship?: string | null
+          client_secondary_payer_id?: string | null
           client_secondaryobjective?: string | null
           client_self_goal?: string | null
           client_sessionnarrative?: string | null
@@ -604,6 +739,7 @@ export type Database = {
           client_substanceabuserisk?: string | null
           client_suicidalideation?: string | null
           client_temppassword?: string | null
+          client_tertiary_payer_id?: string | null
           client_tertiaryobjective?: string | null
           client_thoughtprocess?: string | null
           client_time_zone?: string | null
@@ -621,8 +757,16 @@ export type Database = {
           client_tricare_sponsor_name?: string | null
           client_vacoverage?: string | null
           created_at?: string
+          eligibility_claimmd_id_primary?: string | null
+          eligibility_coinsurance_primary_percent?: number | null
+          eligibility_copay_primary?: number | null
+          eligibility_deductible_primary?: number | null
+          eligibility_last_checked_primary?: string | null
+          eligibility_response_details_primary_json?: Json | null
+          eligibility_status_primary?: string | null
           id: string
           role?: Database["public"]["Enums"]["app_role"]
+          stripe_customer_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -676,6 +820,7 @@ export type Database = {
           client_policy_number_secondary?: string | null
           client_policy_number_tertiary?: string | null
           client_preferred_name?: string | null
+          client_primary_payer_id?: string | null
           client_primaryobjective?: string | null
           client_privatenote?: string | null
           client_problem?: string | null
@@ -684,6 +829,7 @@ export type Database = {
           client_recentdischarge?: string | null
           client_referral_source?: string | null
           client_relationship?: string | null
+          client_secondary_payer_id?: string | null
           client_secondaryobjective?: string | null
           client_self_goal?: string | null
           client_sessionnarrative?: string | null
@@ -702,6 +848,7 @@ export type Database = {
           client_substanceabuserisk?: string | null
           client_suicidalideation?: string | null
           client_temppassword?: string | null
+          client_tertiary_payer_id?: string | null
           client_tertiaryobjective?: string | null
           client_thoughtprocess?: string | null
           client_time_zone?: string | null
@@ -719,8 +866,16 @@ export type Database = {
           client_tricare_sponsor_name?: string | null
           client_vacoverage?: string | null
           created_at?: string
+          eligibility_claimmd_id_primary?: string | null
+          eligibility_coinsurance_primary_percent?: number | null
+          eligibility_copay_primary?: number | null
+          eligibility_deductible_primary?: number | null
+          eligibility_last_checked_primary?: string | null
+          eligibility_response_details_primary_json?: Json | null
+          eligibility_status_primary?: string | null
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          stripe_customer_id?: string | null
           updated_at?: string
         }
         Relationships: []

@@ -1,1 +1,5 @@
+
 project_id = "gqlkritspnhjxfejvgfg"
+
+[functions.insurance-eligibility]
+verify_jwt = true
