@@ -125,9 +125,9 @@ serve(async (req) => {
     
     console.log('Eligibility payload prepared:', JSON.stringify(eligibilityPayload));
     
-    // Call Claim.MD API for eligibility check
+    // Call Claim.MD API for eligibility check - FIXED: Updated endpoint to 'eligdata/'
     const eligibilityResponse = await callClaimMdApi(
-      'EligibilityInquiry',
+      'eligdata/', // Changed from 'EligibilityInquiry' to 'eligdata/'
       eligibilityPayload,
       clientId
     );
