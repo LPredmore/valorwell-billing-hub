@@ -75,7 +75,7 @@ export default function BillingQueue({
       case "submitted to clearinghouse":
         return <Badge variant="secondary">Submitted</Badge>;
       case "accepted":
-        return <Badge variant="success">Accepted</Badge>;
+        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Accepted</Badge>;
       default:
         return <Badge variant="outline">Not Submitted</Badge>;
     }
@@ -105,9 +105,10 @@ export default function BillingQueue({
             <TableRow>
               <TableHead className="w-[50px]">
                 <Checkbox 
-                  checked={allSelected} 
-                  indeterminate={someSelected && !allSelected}
+                  checked={allSelected}
                   onCheckedChange={onSelectAll}
+                  // Fix: Remove the indeterminate prop and handle it with CSS instead
+                  className={someSelected && !allSelected ? "data-[state=checked]:bg-muted data-[state=checked]:text-muted-foreground" : ""}
                 />
               </TableHead>
               <TableHead>Patient</TableHead>

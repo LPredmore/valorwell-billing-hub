@@ -1,10 +1,10 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ClipboardList, Filter, RefreshCcw } from "lucide-react";
+import { ClipboardList, Filter, RefreshCcw, FileText, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useBillableAppointments } from "@/hooks/useClaimsData";
+import { useBillableAppointments, useClaimStatusUpdates, useEraRetrieval } from "@/hooks/useClaimsData";
 import BillingQueue from "@/components/claims/BillingQueue";
 import ClaimDetail from "@/components/claims/ClaimDetail";
 import ClaimBatch from "@/components/claims/ClaimBatch";
@@ -20,6 +20,16 @@ export default function Claims() {
     refetch,
     error,
   } = useBillableAppointments();
+
+  const { 
+    mutate: updateClaimStatuses,
+    isPending: isUpdatingStatuses
+  } = useClaimStatusUpdates();
+
+  const {
+    mutate: retrieveEraFiles,
+    isPending: isRetrievingEra
+  } = useEraRetrieval();
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -54,6 +64,22 @@ export default function Claims() {
     }
   };
 
+  const handleUpdateStatuses = () => {
+    updateClaimStatuses(undefined, {
+      onSuccess: () => {
+        refetch();
+      }
+    });
+  };
+
+  const handleRetrieveEra = () => {
+    retrieveEraFiles(undefined, {
+      onSuccess: () => {
+        refetch();
+      }
+    });
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
@@ -64,14 +90,42 @@ export default function Claims() {
           </h1>
           <p className="text-muted-foreground">Prepare and submit claims for billable services</p>
         </div>
-        <Button
-          onClick={() => refetch()}
-          variant="outline"
-          className="gap-2"
-        >
-          <RefreshCcw size={16} />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleUpdateStatuses}
+            variant="outline"
+            className="gap-2"
+            disabled={isUpdatingStatuses}
+          >
+            {isUpdatingStatuses ? (
+              <RefreshCcw size={16} className="animate-spin" />
+            ) : (
+              <AlertCircle size={16} />
+            )}
+            Update Statuses
+          </Button>
+          <Button
+            onClick={handleRetrieveEra}
+            variant="outline"
+            className="gap-2"
+            disabled={isRetrievingEra}
+          >
+            {isRetrievingEra ? (
+              <RefreshCcw size={16} className="animate-spin" />
+            ) : (
+              <FileText size={16} />
+            )}
+            Process ERA Files
+          </Button>
+          <Button
+            onClick={() => refetch()}
+            variant="outline"
+            className="gap-2"
+          >
+            <RefreshCcw size={16} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

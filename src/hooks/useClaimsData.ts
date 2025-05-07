@@ -80,3 +80,64 @@ export function useClaimHistory(appointmentId: string) {
     enabled: !!appointmentId,
   });
 }
+
+/**
+ * Hook to fetch claim status updates
+ */
+export function useClaimStatusUpdates() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: () => claimsService.getClaimResponses(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['billableAppointments'] });
+      toast({
+        title: "Claim statuses updated",
+        description: `Retrieved ${data.updatedCount} status updates`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to update claim statuses",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+      });
+    }
+  });
+}
+
+/**
+ * Hook to fetch ERA payment data for an appointment
+ */
+export function useEraPaymentData(appointmentId: string) {
+  return useQuery({
+    queryKey: ['eraPayment', appointmentId],
+    queryFn: () => claimsService.getEraPaymentData(appointmentId),
+    enabled: !!appointmentId,
+  });
+}
+
+/**
+ * Hook to fetch ERA files
+ */
+export function useEraRetrieval() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: () => claimsService.retrieveEraFiles(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['billableAppointments'] });
+      toast({
+        title: "ERA files retrieved",
+        description: `Processed ${data.processedCount} ERA files with ${data.paymentCount} payments`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to retrieve ERA files",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+      });
+    }
+  });
+}
