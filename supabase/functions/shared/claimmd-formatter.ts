@@ -120,9 +120,99 @@ export function getClaimMdErrorMessage(errorCode: string): string {
     '60': 'Missing required parameters',
     '65': 'Invalid insurance information',
     '70': 'Insurance not active',
+    '75': 'Subscriber/Insured not found. Verify policy number, name, and date of birth',
     '80': 'Network error or timeout',
     '90': 'Authorization error'
   };
   
   return errorMessages[errorCode] || `Unknown error (Code: ${errorCode})`;
+}
+
+/**
+ * Determines eligibility status from Claim.MD benefit information
+ * 
+ * Parses through the benefit array returned by Claim.MD to determine
+ * if the patient has active coverage based on benefit_coverage_description
+ * or similar fields.
+ */
+export function determineEligibilityStatus(responseData: any): {
+  status: string;
+  copay: number | null;
+  deductible: number | null;
+  coinsurancePercent: number | null;
+} {
+  // Default values
+  let status = 'Unknown';
+  let copay = null;
+  let deductible = null;
+  let coinsurancePercent = null;
+  
+  // Check if there's error information in the response
+  if (responseData?.error || (responseData?.elig && responseData.elig.error)) {
+    return { status: 'Error', copay, deductible, coinsurancePercent };
+  }
+  
+  // Extract benefit information from the response
+  const benefits = responseData?.elig?.benefit || [];
+  
+  if (Array.isArray(benefits) && benefits.length > 0) {
+    // Check for active coverage indicators in the benefits array
+    const hasActiveCoverage = benefits.some(benefit => {
+      const coverageDesc = (benefit.benefit_coverage_description || '').toLowerCase();
+      const coverageCode = benefit.benefit_coverage_code;
+      
+      // Look for active coverage indicators
+      return (
+        coverageDesc.includes('active coverage') || 
+        coverageCode === '1' // Common code for active coverage
+      );
+    });
+    
+    // If active coverage is found, set status to Active
+    if (hasActiveCoverage) {
+      status = 'Active';
+      
+      // Extract benefit details - look for copay information
+      const copayBenefit = benefits.find(benefit => 
+        (benefit.benefit_coverage_code === 'B' || 
+         (benefit.benefit_coverage_description || '').toLowerCase().includes('co-payment')) &&
+        benefit.benefit_code === '98' // For Professional/Physician Visit
+      );
+      
+      if (copayBenefit && copayBenefit.benefit_amount) {
+        copay = Number(copayBenefit.benefit_amount) || null;
+      }
+      
+      // Look for deductible information - typically individual deductible
+      const deductibleBenefit = benefits.find(benefit => 
+        (benefit.benefit_coverage_code === 'C' || 
+         (benefit.benefit_coverage_description || '').toLowerCase().includes('deductible')) &&
+        benefit.benefit_level_code === 'IND' && // Individual level
+        benefit.benefit_code === '98' // For Professional/Physician Visit
+      );
+      
+      if (deductibleBenefit && deductibleBenefit.benefit_amount) {
+        deductible = Number(deductibleBenefit.benefit_amount) || null;
+      }
+      
+      // Look for coinsurance percentage
+      const coinsuranceBenefit = benefits.find(benefit => 
+        (benefit.benefit_coverage_code === 'A' || 
+         (benefit.benefit_coverage_description || '').toLowerCase().includes('co-insurance')) &&
+        benefit.benefit_code === '98' // For Professional/Physician Visit
+      );
+      
+      if (coinsuranceBenefit && coinsuranceBenefit.benefit_percent) {
+        coinsurancePercent = Number(coinsuranceBenefit.benefit_percent) || null;
+      }
+    } else {
+      // If benefits exist but no active coverage, it's likely inactive
+      status = 'Inactive';
+    }
+  } else if (responseData?.elig) {
+    // If elig exists but no benefits, likely inactive or status unknown
+    status = 'Inactive';
+  }
+  
+  return { status, copay, deductible, coinsurancePercent };
 }

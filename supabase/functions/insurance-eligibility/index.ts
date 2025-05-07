@@ -4,7 +4,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { callClaimMdApi } from '../shared/claimmd-api.ts';
-import { formatEligibilityPayload, getClaimMdErrorMessage } from '../shared/claimmd-formatter.ts';
+import { formatEligibilityPayload, getClaimMdErrorMessage, determineEligibilityStatus } from '../shared/claimmd-formatter.ts';
 
 // CORS headers for browser requests
 const corsHeaders = {
@@ -205,27 +205,10 @@ serve(async (req) => {
       });
     }
     
-    // Extract key eligibility information with better error handling
-    const eligibilityStatus = result.eligibilityStatus || 'Unknown';
-    let finalStatus = eligibilityStatus;
+    // Use our new helper function to determine eligibility status and extract benefit details
+    const { status: finalStatus, copay, deductible, coinsurancePercent } = determineEligibilityStatus(result);
     
-    // Normalize status values to something more user-friendly
-    if (/active|eligible/i.test(eligibilityStatus)) {
-      finalStatus = 'Active';
-    } else if (/inactive|ineligible|terminated/i.test(eligibilityStatus)) {
-      finalStatus = 'Inactive';
-    } else {
-      // If we can't determine a clear status, mark as unknown
-      finalStatus = 'Unknown';
-      console.log(`Received unclear eligibility status: "${eligibilityStatus}", marking as Unknown`);
-    }
-    
-    // Extract benefit details with proper null handling
-    const copay = result.benefitsInformation?.copayAmount || null;
-    const deductible = result.benefitsInformation?.deductibleAmount || null;
-    const coinsurancePercent = result.benefitsInformation?.coinsurancePercentage || null;
-    
-    console.log(`Extracted eligibility status: ${finalStatus} (original: ${eligibilityStatus})`);
+    console.log(`Extracted eligibility status: ${finalStatus}`);
     
     // Update client record with eligibility information
     const { error: updateError } = await supabase
@@ -240,10 +223,9 @@ serve(async (req) => {
           ...result,
           processed_at: new Date().toISOString(),
           normalized_status: finalStatus,
-          original_status: eligibilityStatus,
           request_payload: eligibilityPayload
         },
-        eligibility_claimmd_id_primary: result.id || null
+        eligibility_claimmd_id_primary: result.id || (result.elig && result.elig.eligid) || null
       })
       .eq('id', clientId);
       
@@ -256,16 +238,15 @@ serve(async (req) => {
       success: true,
       eligibility: {
         status: finalStatus,
-        originalStatus: eligibilityStatus,
         copay: copay,
         deductible: deductible,
         coinsurancePercent: coinsurancePercent,
         lastChecked: new Date().toISOString(),
-        claimMdId: result.id || null
+        claimMdId: result.id || (result.elig && result.elig.eligid) || null
       },
       details: {
-        benefitInfo: result.benefitsInformation || null,
-        planInfo: result.planInformation || null,
+        benefitInfo: result.benefitsInformation || result.elig?.benefit || null,
+        planInfo: result.planInformation || result.elig?.plan_name || null,
         providerInfo: result.providerInformation || null
       }
     }), {
