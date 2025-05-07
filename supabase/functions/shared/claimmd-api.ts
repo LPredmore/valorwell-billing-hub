@@ -120,15 +120,21 @@ export async function callClaimMdApi(
     console.log(`API URL: ${CLAIMMD_BASE_URL}/${endpoint}`);
     
     // IMPORTANT: Claim.MD requires the AccountKey parameter in the request body with correct casing
+    // Extract all existing properties
+    const requestWithoutApiKey = { ...body };
+    
+    // Create a new object with AccountKey first
     const requestWithApiKey = {
-      ...body,
-      AccountKey: apiKey  // Add AccountKey with correct casing
+      AccountKey: apiKey  // Add AccountKey with correct casing as first property
     };
+    
+    // Add all other properties after AccountKey
+    Object.assign(requestWithApiKey, requestWithoutApiKey);
     
     console.log(`Request body before serialization:`, JSON.stringify(requestWithApiKey));
     
     // Use different request handling based on the endpoint needs
-    const isEligibilityEndpoint = endpoint.toLowerCase().includes('eligibility');
+    const isEligibilityEndpoint = endpoint.toLowerCase().includes('eligibility') || endpoint.toLowerCase().includes('elig');
     let requestContentType: string;
     let serializedBody: string | FormData | URLSearchParams;
     
@@ -139,14 +145,30 @@ export async function callClaimMdApi(
       // First, flatten complex objects if needed
       const flattenedParams = flattenObject(requestWithApiKey);
       
-      // Create URLSearchParams for form encoding
+      // IMPORTANT: Create URLSearchParams with AccountKey as the first parameter
       const formData = new URLSearchParams();
+      
+      // Explicitly add AccountKey first to ensure it's the first parameter in the serialized string
+      formData.append('AccountKey', apiKey);
+      
+      // Then add all other parameters
       Object.entries(flattenedParams).forEach(([key, value]) => {
-        formData.append(key, value);
+        if (key !== 'AccountKey') {  // Skip AccountKey as we've already added it
+          formData.append(key, value);
+        }
       });
       
       serializedBody = formData;
-      console.log(`Using form-urlencoded format. Serialized request body:`, formData.toString());
+      
+      // DEBUG: Log the exact URL-encoded string that will be sent
+      const rawRequestBody = formData.toString();
+      console.log(`CRITICAL - RAW REQUEST BODY (URL-encoded string):`);
+      console.log(`${rawRequestBody}`);
+      
+      // DEBUG: Verify AccountKey is the first parameter
+      if (!rawRequestBody.startsWith('AccountKey=')) {
+        console.warn('WARNING: AccountKey is NOT the first parameter in the request body!');
+      }
     } else {
       // For other endpoints, default to JSON
       requestContentType = 'application/json';
@@ -158,6 +180,14 @@ export async function callClaimMdApi(
       const timeoutId = setTimeout(() => controller.abort(), timeout);
       
       try {
+        // DEBUG: Log request details immediately before fetch
+        console.log('=== FULL REQUEST DETAILS ===');
+        console.log(`Method: POST`);
+        console.log(`URL: ${CLAIMMD_BASE_URL}/${endpoint}`);
+        console.log(`Headers: Content-Type: ${requestContentType}, Accept: application/json`);
+        console.log(`Body: ${typeof serializedBody === 'string' ? serializedBody : serializedBody.toString()}`);
+        console.log('=== END REQUEST DETAILS ===');
+        
         const response = await fetch(`${CLAIMMD_BASE_URL}/${endpoint}`, {
           method: 'POST',
           headers: {
@@ -248,7 +278,7 @@ export async function callClaimMdApi(
         // Log the API interaction
         await logApiInteraction(
           endpoint,
-          isEligibilityEndpoint ? serializedBody.toString() : requestWithApiKey,
+          isEligibilityEndpoint ? typeof serializedBody === 'string' ? serializedBody : serializedBody.toString() : requestWithApiKey,
           responseData,
           success ? 'success' : 'error',
           errorMessage,

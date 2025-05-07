@@ -1,4 +1,3 @@
-
 // Edge function for checking insurance eligibility through Claim.MD API
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -84,50 +83,71 @@ serve(async (req) => {
       });
     }
     
-    // Prepare eligibility request payload - simplified to match Claim.MD's expected format
-    // This avoids deep nested objects that might not be properly formatted in x-www-form-urlencoded
+    // Log environment variable key (masked) to verify it's available
+    const apiKeyEnv = Deno.env.get('CLAIMMD_API_KEY');
+    if (!apiKeyEnv) {
+      console.error('CRITICAL ERROR: CLAIMMD_API_KEY environment variable is not set');
+      return new Response(JSON.stringify({ error: 'API configuration error', details: 'Missing API key configuration' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    } else {
+      // Log just the first 4 and last 4 characters for verification purposes
+      const keyLength = apiKeyEnv.length;
+      const maskedKey = keyLength > 8 ? 
+        `${apiKeyEnv.substring(0, 4)}...${apiKeyEnv.substring(keyLength - 4)}` : 
+        '********';
+      console.log(`CLAIMMD_API_KEY environment variable is set (masked: ${maskedKey}), length: ${keyLength} chars`);
+    }
+    
+    // Prepare eligibility request payload - tailored specifically for Claim.MD's requirements
+    // Keep only the essential fields and ensure proper naming according to their API docs
     const eligibilityPayload = {
-      // Provider information
-      providerNpi: practiceData.practice_npi,
-      providerTaxId: practiceData.practice_taxid,
-      providerFirstName: "", // Not needed for organization
-      providerLastName: practiceData.practice_name,
-      providerOrganizationName: practiceData.practice_name,
-      providerAddress1: practiceData.practice_address1,
-      providerAddress2: practiceData.practice_address2 || "",
-      providerCity: practiceData.practice_city,
-      providerState: practiceData.practice_state,
-      providerZip: practiceData.practice_zip,
+      // These field names are based exactly on Claim.MD's /services/eligdata/ documentation from their PDF
+      // Provider information - using the field names they expect
+      prov_npi: practiceData.practice_npi,
+      prov_taxid: practiceData.practice_taxid,
+      prov_lname: practiceData.practice_name, // For organizations
+      prov_fname: "",  // Not needed for organization
+      prov_addr1: practiceData.practice_address1,
+      prov_addr2: practiceData.practice_address2 || "",
+      prov_city: practiceData.practice_city,
+      prov_state: practiceData.practice_state,
+      prov_zip: practiceData.practice_zip,
       
-      // Subscriber information
-      subscriberMemberId: clientData.client_policy_number_primary,
-      subscriberFirstName: clientData.client_first_name,
-      subscriberLastName: clientData.client_last_name,
-      subscriberDateOfBirth: clientData.client_date_of_birth,
-      subscriberGender: clientData.client_gender?.toUpperCase() === 'FEMALE' ? 'F' : 'M', // Claim.MD expects 'M' or 'F'
-      subscriberAddress1: "", 
-      subscriberCity: "",
-      subscriberState: clientData.client_state || "",
-      subscriberZip: "",
+      // Subscriber/Patient information
+      ins_id: clientData.client_policy_number_primary,
+      ins_name_l: clientData.client_last_name,
+      ins_name_f: clientData.client_first_name,
+      dob: clientData.client_date_of_birth,
+      gender: clientData.client_gender?.toUpperCase() === 'FEMALE' ? 'F' : 'M',
       
       // Payer information
-      payerId: clientData.client_primary_payer_id,
-      payerName: clientData.client_insurance_company_primary,
+      payerid: clientData.client_primary_payer_id || "",
+      ins_name: clientData.client_insurance_company_primary,
       
       // Service information
-      serviceTypes: "98", // 98 is for Behavioral Health
-      serviceDateFrom: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
-      serviceDateTo: new Date().toISOString().split('T')[0],
+      service_type: "98", // 98 is for Behavioral Health
+      fdos: new Date().toISOString().split('T')[0],  // From Date of Service (current date)
+      tdos: new Date().toISOString().split('T')[0],  // To Date of Service (current date)
       
-      // No dependent information needed
-      isDependentRequest: "false"
+      // Required by Claim.MD docs
+      pat_rel: "SELF", // Relationship to subscriber (SELF, SPOUSE, CHILD, OTHER)
+      request_id: `${clientId.substring(0,8)}-${Date.now()}` // Unique request ID
     };
     
+    // DEBUG logging for key parameters
     console.log('Eligibility payload prepared:', JSON.stringify(eligibilityPayload));
+    console.log('CRITICAL DEBUG INFO:');
+    console.log(`Client ID: ${clientId}`);
+    console.log(`Patient name: ${eligibilityPayload.ins_name_f} ${eligibilityPayload.ins_name_l}`);
+    console.log(`Insurance ID: ${eligibilityPayload.ins_id}`);
+    console.log(`Insurance name: ${eligibilityPayload.ins_name}`);
+    console.log(`Payer ID: ${eligibilityPayload.payerid}`);
     
-    // Call Claim.MD API for eligibility check - FIXED: Updated endpoint to 'eligdata/'
+    // Call Claim.MD API for eligibility check
     const eligibilityResponse = await callClaimMdApi(
-      'eligdata/', // Changed from 'EligibilityInquiry' to 'eligdata/'
+      'eligdata/', // Using the correct endpoint
       eligibilityPayload,
       clientId
     );
