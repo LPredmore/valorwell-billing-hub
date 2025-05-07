@@ -187,6 +187,42 @@ async function processEraData(eraData: any): Promise<{ processedCount: number; p
   return { processedCount, paymentCount };
 }
 
+// Extract ERA IDs from API response that could be XML or JSON
+function extractEraIdsFromResponse(responseData: any): { eraId: string }[] {
+  console.log("Extracting ERA IDs from response data");
+  
+  // If we have a JSON response with eras field
+  if (responseData && responseData.eras && Array.isArray(responseData.eras)) {
+    console.log(`Found ${responseData.eras.length} ERAs in JSON response`);
+    return responseData.eras;
+  }
+  
+  // If we have a raw XML response
+  if (responseData && responseData.raw && typeof responseData.raw === 'string' && 
+      (responseData.contentType === 'xml' || responseData.format === 'xml' || responseData.raw.includes('<'))) {
+    console.log(`Processing XML response to extract ERA IDs`);
+    const xml = responseData.raw;
+    
+    // Very simple XML parsing to extract ERA IDs
+    // Example: <era><eraId>123</eraId>...</era><era><eraId>456</eraId>...</era>
+    const eraIds: { eraId: string }[] = [];
+    const matches = xml.matchAll(/<era.*?>\s*<eraId>(.*?)<\/eraId>|<EraId>(.*?)<\/EraId>/g);
+    
+    for (const match of matches) {
+      const eraId = match[1] || match[2]; // Get the group that matched
+      if (eraId) {
+        eraIds.push({ eraId });
+      }
+    }
+    
+    console.log(`Extracted ${eraIds.length} ERA IDs from XML response`);
+    return eraIds;
+  }
+  
+  console.log("Could not extract ERA IDs from response, returning empty array");
+  return [];
+}
+
 // Get detailed ERA data for a specific ERA ID
 async function getEraDetail(eraId: string): Promise<any> {
   console.log(`Fetching details for ERA ID: ${eraId}`);
@@ -207,6 +243,15 @@ async function getEraDetail(eraId: string): Promise<any> {
   }
   
   console.log(`Successfully retrieved ERA detail for ID: ${eraId}`);
+  
+  // Check if we got XML instead of JSON and need to parse it
+  if (result.data && result.data.contentType === 'xml') {
+    console.log("Received XML response for ERA detail, attempting basic parsing");
+    // Here we could implement XML parsing if needed in the future
+    // For now, return the raw data
+    return result.data;
+  }
+  
   return result.data;
 }
 
@@ -261,8 +306,9 @@ Deno.serve(async (req: Request) => {
       );
     }
     
-    // Check if we have ERA IDs to process
-    const eraIds = eraListResult.data?.eras || [];
+    // Extract ERA IDs from the response (handling both XML and JSON)
+    const eraIds = extractEraIdsFromResponse(eraListResult.data);
+    
     if (!eraIds || eraIds.length === 0) {
       // No new ERAs to process
       console.log("No new ERA files to process");
@@ -285,7 +331,7 @@ Deno.serve(async (req: Request) => {
     let totalPayments = 0;
     
     for (const era of eraIds) {
-      const eraId = era.eraId || era.era_id || era.id;
+      const eraId = era.eraId;
       if (!eraId) {
         console.log("Skipping ERA with no ID");
         continue;

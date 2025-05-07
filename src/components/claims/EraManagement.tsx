@@ -31,13 +31,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 export default function EraManagement() {
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
-  const { data: eraList = [], isLoading: isLoadingEraList } = useEraList();
-  const { data: unreconciledPayments = [], isLoading: isLoadingUnreconciled } = useUnreconciledPayments();
-  const { mutate: retrieveEra, isPending: isRetrieving } = useEraRetrieval();
+  const { data: eraList = [], isLoading: isLoadingEraList, error: eraListError } = useEraList();
+  const { data: unreconciledPayments = [], isLoading: isLoadingUnreconciled, error: unreconciledError } = useUnreconciledPayments();
+  const { mutate: retrieveEra, isPending: isRetrieving, error: retrieveError } = useEraRetrieval();
   const { mutate: reconcilePayment, isPending: isReconciling } = useReconcilePayment();
+  const { toast } = useToast();
   
   // Format currency
   const formatCurrency = (amount: number | null | undefined) => {
@@ -52,7 +55,23 @@ export default function EraManagement() {
   };
 
   const handleRetrieveEra = () => {
-    retrieveEra();
+    retrieveEra(undefined, {
+      onSuccess: (data) => {
+        toast({
+          title: "ERA Files Retrieved",
+          description: data.message || `Successfully processed ERA files`,
+          variant: "default",
+        });
+      },
+      onError: (error) => {
+        console.error("ERA retrieval error:", error);
+        toast({
+          title: "Failed to retrieve ERA files",
+          description: error instanceof Error ? error.message : String(error),
+          variant: "destructive",
+        });
+      }
+    });
   };
   
   const selectedPayment = unreconciledPayments.find(payment => payment.id === selectedPaymentId);
@@ -93,6 +112,18 @@ export default function EraManagement() {
       }, {
         onSuccess: () => {
           setSelectedPaymentId(null);
+          toast({
+            title: "Payment Reconciled",
+            description: "The payment has been successfully reconciled",
+            variant: "default",
+          });
+        },
+        onError: (error) => {
+          toast({
+            title: "Failed to reconcile payment",
+            description: error instanceof Error ? error.message : String(error),
+            variant: "destructive",
+          });
         }
       });
     }
@@ -116,6 +147,16 @@ export default function EraManagement() {
         </Button>
       </div>
       
+      {retrieveError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            Failed to retrieve ERA files: {retrieveError instanceof Error ? retrieveError.message : String(retrieveError)}
+          </AlertDescription>
+        </Alert>
+      )}
+      
       <Tabs defaultValue="unreconciled">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="unreconciled" className="flex items-center gap-2">
@@ -137,6 +178,16 @@ export default function EraManagement() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {unreconciledError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>
+                    Failed to load unreconciled payments: {unreconciledError instanceof Error ? unreconciledError.message : String(unreconciledError)}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               {isLoadingUnreconciled ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -197,6 +248,16 @@ export default function EraManagement() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {eraListError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>
+                    Failed to load ERA files: {eraListError instanceof Error ? eraListError.message : String(eraListError)}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               {isLoadingEraList ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

@@ -68,6 +68,18 @@ async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries = 3): Promis
   }
 }
 
+// Determine the response type based on content-type header
+function getResponseType(response: Response): 'json' | 'xml' | 'text' {
+  const contentType = response.headers.get('Content-Type') || '';
+  if (contentType.includes('application/json')) {
+    return 'json';
+  } else if (contentType.includes('application/xml') || contentType.includes('text/xml')) {
+    return 'xml';
+  } else {
+    return 'text';
+  }
+}
+
 // The main function to call Claim.MD API endpoints
 export async function callClaimMdApi(
   endpoint: string,
@@ -93,6 +105,7 @@ export async function callClaimMdApi(
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`,
+            'Accept': 'application/json' // Prefer JSON responses if available
           },
           body: JSON.stringify(body),
           signal: controller.signal,
@@ -103,89 +116,82 @@ export async function callClaimMdApi(
         // Get processing time
         const processingTime = Math.round(performance.now() - startTime);
         console.log(`API response received in ${processingTime}ms with status: ${response.status} ${response.statusText}`);
+        console.log(`Response headers:`, JSON.stringify(Object.fromEntries([...response.headers.entries()])));
         
-        // Handle the response based on status code
+        // Determine content type from response headers
+        const responseType = getResponseType(response);
+        console.log(`Response content type determined to be: ${responseType}`);
+        
+        // Handle the response based on status code and content type
         let responseData;
         let errorMessage = null;
         
-        if (response.ok) {
-          // Success response (200-299)
-          try {
-            responseData = await response.json();
-            console.log(`API response:`, JSON.stringify(responseData).substring(0, 500) + '...');
-            
-            await logApiInteraction(
-              endpoint,
-              body,
-              responseData,
-              'success',
-              null,
-              clientId,
-              processingTime
-            );
-            
-            return { success: true, data: responseData };
-          } catch (err) {
-            console.error('Failed to parse successful response as JSON:', err);
-            
-            // Try to get as text if JSON parsing fails
+        try {
+          // Process response based on content type
+          if (responseType === 'json') {
             try {
+              responseData = await response.json();
+              console.log(`Parsed JSON response successfully`);
+            } catch (jsonErr) {
+              console.error('Failed to parse as JSON despite content type:', jsonErr);
+              // Fallback to text parsing
               const text = await response.text();
-              responseData = { raw: text };
-              console.log(`Non-JSON response:`, text.substring(0, 500) + '...');
-              
-              await logApiInteraction(
-                endpoint,
-                body,
-                responseData,
-                'success',
-                'Response was not valid JSON',
-                clientId,
-                processingTime
-              );
-              
-              return { success: true, data: responseData };
-            } catch (textErr) {
-              console.error('Failed to read response as text:', textErr);
-              responseData = { status: response.status, statusText: response.statusText };
-              errorMessage = `Failed to read response body: ${textErr instanceof Error ? textErr.message : String(textErr)}`;
+              responseData = { raw: text, contentType: responseType };
             }
+          } else if (responseType === 'xml') {
+            // For XML, just store as text for now
+            // In future we could implement XML parsing if needed
+            const text = await response.text();
+            console.log(`Received XML response, storing as text (first 500 chars): ${text.substring(0, 500)}`);
+            responseData = { 
+              raw: text,
+              contentType: responseType,
+              format: 'xml'
+            };
+          } else {
+            // Default to text for unknown types
+            const text = await response.text();
+            console.log(`Received plain text response (first 500 chars): ${text.substring(0, 500)}`);
+            responseData = { 
+              raw: text,
+              contentType: responseType,
+              format: 'text'
+            };
           }
-        } else {
-          // Error response (non 200-299)
-          errorMessage = `API returned status ${response.status} ${response.statusText}`;
-          console.error(`API error for ${endpoint}: ${errorMessage}`);
-          
-          // Try to parse error details
-          try {
-            responseData = await response.json();
-            console.log(`Error response details:`, JSON.stringify(responseData).substring(0, 500) + '...');
-          } catch (jsonErr) {
-            // If JSON parsing fails, try to get as text
-            try {
-              const text = await response.text();
-              responseData = { raw: text || response.statusText };
-              console.log(`Error response (text):`, text.substring(0, 500) + '...');
-            } catch (textErr) {
-              // If both fail, use status information
-              console.error('Failed to read error response body:', textErr);
-              responseData = { status: response.status, statusText: response.statusText };
-            }
-          }
+        } catch (parseErr) {
+          // Handle parsing errors
+          console.error('Failed to parse response body:', parseErr);
+          responseData = { 
+            status: response.status, 
+            statusText: response.statusText,
+            error: 'Failed to parse response body',
+            errorDetails: parseErr instanceof Error ? parseErr.message : String(parseErr)
+          };
+          errorMessage = `Failed to parse response: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`;
         }
         
-        // Log the error interaction
+        // Determine success based on HTTP status
+        const success = response.ok;
+        if (!success) {
+          errorMessage = `API returned status ${response.status} ${response.statusText}`;
+        }
+        
+        // Log the API interaction
         await logApiInteraction(
           endpoint,
           body,
           responseData,
-          'error',
+          success ? 'success' : 'error',
           errorMessage,
           clientId,
           processingTime
         );
         
-        return { success: false, error: errorMessage, data: responseData };
+        return { 
+          success, 
+          data: responseData,
+          ...(errorMessage && { error: errorMessage })
+        };
       } finally {
         clearTimeout(timeoutId);
       }
