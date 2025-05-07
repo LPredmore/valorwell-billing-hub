@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,13 +13,13 @@ const InsuranceVerification = () => {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   
-  // Fetch clients for verification
+  // Fetch clients for verification - Updated query to include all needed fields
   const { data: clients, isLoading: isLoadingClients, refetch } = useQuery({
     queryKey: ['verification-clients'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
-        .select('id, client_first_name, client_last_name, client_insurance_company_primary, client_policy_number_primary, eligibility_last_checked_primary, eligibility_status_primary, eligibility_response_details_primary_json')
+        .select('id, client_first_name, client_last_name, client_insurance_company_primary, client_policy_number_primary, eligibility_last_checked_primary, eligibility_status_primary, eligibility_response_details_primary_json, eligibility_copay_primary, eligibility_deductible_primary, eligibility_coinsurance_primary_percent')
         .order('client_last_name', { ascending: true });
         
       if (error) throw error;
