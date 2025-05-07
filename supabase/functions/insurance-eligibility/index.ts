@@ -125,58 +125,108 @@ serve(async (req) => {
     
     console.log('Eligibility payload prepared:', JSON.stringify(eligibilityPayload));
     
-    // Call Claim.MD API for eligibility check
+    // Call Claim.MD API for eligibility check - now with improved error handling
     const eligibilityResponse = await callClaimMdApi(
       'EligibilityInquiry',
       eligibilityPayload,
       clientId
     );
     
+    // IMPORTANT: Properly check for errors in the API response
     if (!eligibilityResponse.success) {
       const errorDetails = eligibilityResponse.error || 'Unknown API error';
       console.error('Eligibility check failed:', errorDetails);
       
-      // Update client record with error information
+      // Update client record with specific error information
       await supabase
         .from('clients')
         .update({
           eligibility_status_primary: 'Error',
           eligibility_last_checked_primary: new Date().toISOString(),
-          eligibility_response_details_primary_json: { error: errorDetails }
+          eligibility_response_details_primary_json: { 
+            error: errorDetails,
+            timestamp: new Date().toISOString(),
+            requestId: Math.random().toString(36).substring(2, 15)
+          }
         })
         .eq('id', clientId);
         
       return new Response(JSON.stringify({ 
         error: 'Eligibility check failed', 
-        details: errorDetails 
+        details: errorDetails,
+        errorCode: eligibilityResponse.data?.error?.error_code || 'unknown'
       }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
     
-    // Process the eligibility response
+    // Process the eligibility response - now with better validation
     const result = eligibilityResponse.data;
     console.log('Raw eligibility response:', JSON.stringify(result));
     
-    // Extract key eligibility information
+    // Safety check - ensure we have valid data
+    if (!result || typeof result !== 'object') {
+      console.error('Invalid eligibility response format:', result);
+      
+      await supabase
+        .from('clients')
+        .update({
+          eligibility_status_primary: 'Error',
+          eligibility_last_checked_primary: new Date().toISOString(),
+          eligibility_response_details_primary_json: { 
+            error: 'Invalid response format',
+            rawResponse: result
+          }
+        })
+        .eq('id', clientId);
+        
+      return new Response(JSON.stringify({ 
+        error: 'Invalid eligibility response format', 
+        details: 'The API returned data in an unexpected format'
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // Extract key eligibility information with better error handling
     const eligibilityStatus = result.eligibilityStatus || 'Unknown';
+    let finalStatus = eligibilityStatus;
+    
+    // Normalize status values to something more user-friendly
+    if (/active|eligible/i.test(eligibilityStatus)) {
+      finalStatus = 'Active';
+    } else if (/inactive|ineligible|terminated/i.test(eligibilityStatus)) {
+      finalStatus = 'Inactive';
+    } else {
+      // If we can't determine a clear status, mark as unknown
+      finalStatus = 'Unknown';
+      console.log(`Received unclear eligibility status: "${eligibilityStatus}", marking as Unknown`);
+    }
+    
+    // Extract benefit details with proper null handling
     const copay = result.benefitsInformation?.copayAmount || null;
     const deductible = result.benefitsInformation?.deductibleAmount || null;
     const coinsurancePercent = result.benefitsInformation?.coinsurancePercentage || null;
     
-    console.log(`Extracted eligibility status: ${eligibilityStatus}`);
+    console.log(`Extracted eligibility status: ${finalStatus} (original: ${eligibilityStatus})`);
     
     // Update client record with eligibility information
     const { error: updateError } = await supabase
       .from('clients')
       .update({
-        eligibility_status_primary: eligibilityStatus,
+        eligibility_status_primary: finalStatus,
         eligibility_copay_primary: copay,
         eligibility_deductible_primary: deductible,
         eligibility_coinsurance_primary_percent: coinsurancePercent,
         eligibility_last_checked_primary: new Date().toISOString(),
-        eligibility_response_details_primary_json: result,
+        eligibility_response_details_primary_json: {
+          ...result,
+          processed_at: new Date().toISOString(),
+          normalized_status: finalStatus,
+          original_status: eligibilityStatus
+        },
         eligibility_claimmd_id_primary: result.id || null
       })
       .eq('id', clientId);
@@ -185,16 +235,22 @@ serve(async (req) => {
       console.error('Error updating client with eligibility data:', updateError);
     }
     
-    // Return the eligibility results
+    // Return the eligibility results with more detailed information
     return new Response(JSON.stringify({
       success: true,
       eligibility: {
-        status: eligibilityStatus,
+        status: finalStatus,
+        originalStatus: eligibilityStatus,
         copay: copay,
         deductible: deductible,
         coinsurancePercent: coinsurancePercent,
         lastChecked: new Date().toISOString(),
         claimMdId: result.id || null
+      },
+      details: {
+        benefitInfo: result.benefitsInformation || null,
+        planInfo: result.planInformation || null,
+        providerInfo: result.providerInformation || null
       }
     }), {
       status: 200,

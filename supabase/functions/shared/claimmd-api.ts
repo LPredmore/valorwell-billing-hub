@@ -96,14 +96,14 @@ export async function callClaimMdApi(
     console.log(`Calling Claim.MD API: ${endpoint}`);
     console.log(`API URL: ${CLAIMMD_BASE_URL}/${endpoint}`);
     
-    // Add the AccountKey parameter to the request body as required by Claim.MD API
-    // This is based on the Claim.MD API.pdf documentation
+    // IMPORTANT: Claim.MD requires the AccountKey parameter in the request body
+    // (not as a header or query parameter)
     const requestBody = {
       ...body,
-      AccountKey: apiKey,  // Add AccountKey parameter using the API key
+      AccountKey: apiKey,  // Add AccountKey parameter using the API key with correct casing
     };
     
-    console.log(`Request body:`, JSON.stringify(requestBody));
+    console.log(`Request body before serialization:`, JSON.stringify(requestBody));
     
     const makeRequest = async () => {
       const controller = new AbortController();
@@ -134,40 +134,43 @@ export async function callClaimMdApi(
         // Handle the response based on status code and content type
         let responseData;
         let errorMessage = null;
+        let responseText = await response.text(); // Always get the raw text for logging
+        console.log(`Raw API response (first 500 chars): ${responseText.substring(0, 500)}`);
         
         try {
           // Process response based on content type
           if (responseType === 'json') {
             try {
-              responseData = await response.json();
+              // Parse the response text that we already retrieved
+              responseData = JSON.parse(responseText);
               console.log(`Parsed JSON response successfully`);
               
-              // Check for Claim.MD specific error structures - even with HTTP 200 status
-              if (responseData && (responseData.error_code || responseData.error_mesg)) {
-                errorMessage = `Claim.MD API Error: ${responseData.error_mesg || 'Unknown error'} (Code: ${responseData.error_code || 'N/A'})`;
+              // IMPORTANT: Check for Claim.MD specific error structures in the response
+              // This is critical for detecting API errors even with HTTP 200 status
+              if (responseData && responseData.error) {
+                const errorCode = responseData.error.error_code || 'unknown';
+                const errorMsg = responseData.error.error_mesg || 'Unknown API error';
+                errorMessage = `Claim.MD API Error: ${errorMsg} (Code: ${errorCode})`;
                 console.error(errorMessage);
               }
             } catch (jsonErr) {
               console.error('Failed to parse as JSON despite content type:', jsonErr);
-              // Fallback to text parsing
-              const text = await response.text();
-              responseData = { raw: text, contentType: responseType };
+              responseData = { raw: responseText, contentType: responseType };
+              errorMessage = `Failed to parse JSON response: ${jsonErr instanceof Error ? jsonErr.message : String(jsonErr)}`;
             }
           } else if (responseType === 'xml') {
             // For XML, just store as text for now
-            const text = await response.text();
-            console.log(`Received XML response, storing as text (first 500 chars): ${text.substring(0, 500)}`);
+            console.log(`Received XML response, storing as text (first 500 chars): ${responseText.substring(0, 500)}`);
             responseData = { 
-              raw: text,
+              raw: responseText,
               contentType: responseType,
               format: 'xml'
             };
           } else {
             // Default to text for unknown types
-            const text = await response.text();
-            console.log(`Received plain text response (first 500 chars): ${text.substring(0, 500)}`);
+            console.log(`Received plain text response (first 500 chars): ${responseText.substring(0, 500)}`);
             responseData = { 
-              raw: text,
+              raw: responseText,
               contentType: responseType,
               format: 'text'
             };
@@ -178,6 +181,7 @@ export async function callClaimMdApi(
           responseData = { 
             status: response.status, 
             statusText: response.statusText,
+            raw: responseText,
             error: 'Failed to parse response body',
             errorDetails: parseErr instanceof Error ? parseErr.message : String(parseErr)
           };
@@ -185,6 +189,7 @@ export async function callClaimMdApi(
         }
         
         // Determine success based on HTTP status and Claim.MD error data
+        // IMPORTANT: Even with HTTP 200, consider it a failure if there's a Claim.MD error
         const success = response.ok && !errorMessage;
         if (!success && !errorMessage) {
           errorMessage = `API returned status ${response.status} ${response.statusText}`;
