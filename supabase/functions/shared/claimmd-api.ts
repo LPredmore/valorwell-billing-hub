@@ -40,6 +40,34 @@ async function logApiInteraction(endpoint: string, request: any, response: any, 
   }
 }
 
+// Retry function with exponential backoff for transient errors
+async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  let retries = 0;
+  
+  while (true) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (retries >= maxRetries) throw err;
+      
+      // Only retry on network errors, timeouts, or 5xx server errors
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      const shouldRetry = 
+        errorMsg.includes('network') || 
+        errorMsg.includes('timeout') || 
+        errorMsg.includes('abort') || 
+        (err as any)?.status >= 500;
+      
+      if (!shouldRetry) throw err;
+      
+      const delay = Math.pow(2, retries) * 1000 + Math.random() * 1000;
+      console.log(`Retrying API call after ${delay}ms (attempt ${retries + 1}/${maxRetries})`);
+      await new Promise(r => setTimeout(r, delay));
+      retries++;
+    }
+  }
+}
+
 // The main function to call Claim.MD API endpoints
 export async function callClaimMdApi(
   endpoint: string,
@@ -52,63 +80,120 @@ export async function callClaimMdApi(
   
   try {
     console.log(`Calling Claim.MD API: ${endpoint}`);
+    console.log(`API URL: ${CLAIMMD_BASE_URL}/${endpoint}`);
     console.log(`Request body:`, JSON.stringify(body));
     
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const makeRequest = async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      
+      try {
+        const response = await fetch(`${CLAIMMD_BASE_URL}/${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // Get processing time
+        const processingTime = Math.round(performance.now() - startTime);
+        console.log(`API response received in ${processingTime}ms with status: ${response.status} ${response.statusText}`);
+        
+        // Handle the response based on status code
+        let responseData;
+        let errorMessage = null;
+        
+        if (response.ok) {
+          // Success response (200-299)
+          try {
+            responseData = await response.json();
+            console.log(`API response:`, JSON.stringify(responseData).substring(0, 500) + '...');
+            
+            await logApiInteraction(
+              endpoint,
+              body,
+              responseData,
+              'success',
+              null,
+              clientId,
+              processingTime
+            );
+            
+            return { success: true, data: responseData };
+          } catch (err) {
+            console.error('Failed to parse successful response as JSON:', err);
+            
+            // Try to get as text if JSON parsing fails
+            try {
+              const text = await response.text();
+              responseData = { raw: text };
+              console.log(`Non-JSON response:`, text.substring(0, 500) + '...');
+              
+              await logApiInteraction(
+                endpoint,
+                body,
+                responseData,
+                'success',
+                'Response was not valid JSON',
+                clientId,
+                processingTime
+              );
+              
+              return { success: true, data: responseData };
+            } catch (textErr) {
+              console.error('Failed to read response as text:', textErr);
+              responseData = { status: response.status, statusText: response.statusText };
+              errorMessage = `Failed to read response body: ${textErr instanceof Error ? textErr.message : String(textErr)}`;
+            }
+          }
+        } else {
+          // Error response (non 200-299)
+          errorMessage = `API returned status ${response.status} ${response.statusText}`;
+          console.error(`API error for ${endpoint}: ${errorMessage}`);
+          
+          // Try to parse error details
+          try {
+            responseData = await response.json();
+            console.log(`Error response details:`, JSON.stringify(responseData).substring(0, 500) + '...');
+          } catch (jsonErr) {
+            // If JSON parsing fails, try to get as text
+            try {
+              const text = await response.text();
+              responseData = { raw: text || response.statusText };
+              console.log(`Error response (text):`, text.substring(0, 500) + '...');
+            } catch (textErr) {
+              // If both fail, use status information
+              console.error('Failed to read error response body:', textErr);
+              responseData = { status: response.status, statusText: response.statusText };
+            }
+          }
+        }
+        
+        // Log the error interaction
+        await logApiInteraction(
+          endpoint,
+          body,
+          responseData,
+          'error',
+          errorMessage,
+          clientId,
+          processingTime
+        );
+        
+        return { success: false, error: errorMessage, data: responseData };
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
     
-    const response = await fetch(`${CLAIMMD_BASE_URL}/${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
+    // Use retry mechanism for the API call
+    return await retryWithBackoff(makeRequest);
     
-    clearTimeout(timeoutId);
-    
-    const processingTime = Math.round(performance.now() - startTime);
-    
-    // Try to parse response as JSON
-    let responseData;
-    try {
-      responseData = await response.json();
-    } catch (err) {
-      const text = await response.text();
-      console.error('Failed to parse response as JSON:', text);
-      responseData = { raw: text };
-    }
-    
-    console.log(`API response status: ${response.status}`);
-    console.log(`API response:`, JSON.stringify(responseData).substring(0, 500) + '...');
-    
-    // Log the API interaction
-    if (response.ok) {
-      await logApiInteraction(
-        endpoint,
-        body,
-        responseData,
-        'success',
-        null,
-        clientId,
-        processingTime
-      );
-      return { success: true, data: responseData };
-    } else {
-      const errorMessage = responseData.message || response.statusText;
-      await logApiInteraction(
-        endpoint,
-        body,
-        responseData,
-        'error',
-        errorMessage,
-        clientId,
-        processingTime
-      );
-      return { success: false, error: errorMessage, data: responseData };
-    }
   } catch (error) {
     const processingTime = Math.round(performance.now() - startTime);
     const errorMessage = error instanceof Error ? 

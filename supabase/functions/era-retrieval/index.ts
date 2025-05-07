@@ -142,6 +142,8 @@ async function updateAppointmentWithEraData(appointmentId: string, paymentData: 
     
     if (error) {
       console.error(`Error updating ERA data for appointment ${appointmentId}:`, error);
+    } else {
+      console.log(`Successfully updated appointment ${appointmentId} with ERA data`);
     }
   } catch (err) {
     console.error(`Failed to update ERA data for appointment ${appointmentId}:`, err);
@@ -154,17 +156,29 @@ async function processEraData(eraData: any): Promise<{ processedCount: number; p
   let paymentCount = 0;
   
   if (!eraData || !eraData.payments) {
+    console.log("No payments found in ERA data");
     return { processedCount, paymentCount };
   }
   
+  console.log(`Processing ${eraData.payments.length} payments from ERA data`);
+  
   for (const payment of eraData.payments) {
-    if (!payment.claimId && !payment.claim_id) continue;
+    if (!payment.claimId && !payment.claim_id) {
+      console.log("Skipping payment with no claim ID");
+      continue;
+    }
     
     const claimId = payment.claimId || payment.claim_id;
+    console.log(`Processing payment for claim ID: ${claimId}`);
+    
     const appointmentId = await findAppointmentByClaimId(claimId);
     
-    if (!appointmentId) continue;
+    if (!appointmentId) {
+      console.log(`No matching appointment found for claim ID: ${claimId}`);
+      continue;
+    }
     
+    console.log(`Updating appointment ${appointmentId} with ERA payment data`);
     await updateAppointmentWithEraData(appointmentId, payment);
     paymentCount++;
   }
@@ -175,6 +189,8 @@ async function processEraData(eraData: any): Promise<{ processedCount: number; p
 
 // Get detailed ERA data for a specific ERA ID
 async function getEraDetail(eraId: string): Promise<any> {
+  console.log(`Fetching details for ERA ID: ${eraId}`);
+  
   const result = await callClaimMdApi(
     'eradata', 
     {
@@ -186,9 +202,11 @@ async function getEraDetail(eraId: string): Promise<any> {
   
   if (!result.success) {
     console.error(`Failed to fetch detail for ERA ${eraId}:`, result.error);
+    console.error("Error details:", JSON.stringify(result.data || {}).substring(0, 500));
     return null;
   }
   
+  console.log(`Successfully retrieved ERA detail for ID: ${eraId}`);
   return result.data;
 }
 
@@ -200,8 +218,11 @@ Deno.serve(async (req: Request) => {
   }
   
   try {
+    console.log("ERA retrieval function called");
+    
     // Only allow POST requests for ERA retrieval
     if (req.method !== 'POST') {
+      console.log(`Rejected ${req.method} request, only POST is allowed`);
       return new Response(
         JSON.stringify({ success: false, error: 'Method Not Allowed' }),
         { headers: { 'Content-Type': 'application/json', ...corsHeaders }, status: 405 }
@@ -210,9 +231,9 @@ Deno.serve(async (req: Request) => {
     
     // Get the last ERA check date
     const lastCheckDate = await getLastEraCheck();
-    console.log(`Retrieving ERAs since: ${lastCheckDate}`);
+    const today = new Date().toISOString().split('T')[0]; // Today in YYYY-MM-DD format
     
-    // Add debugging info to check environment variables
+    console.log(`Starting ERA retrieval from ${lastCheckDate} to ${today}`);
     console.log(`API Key exists: ${!!Deno.env.get('CLAIMMD_API_KEY')}`);
     
     // Step 1: First call the eralist endpoint to get available ERAs
@@ -221,7 +242,7 @@ Deno.serve(async (req: Request) => {
       'eralist',
       {
         FromDate: lastCheckDate,
-        ToDate: new Date().toISOString().split('T')[0], // Today
+        ToDate: today,
         IncludeProcessed: false // Only get unprocessed ERAs
       },
       null
@@ -244,6 +265,7 @@ Deno.serve(async (req: Request) => {
     const eraIds = eraListResult.data?.eras || [];
     if (!eraIds || eraIds.length === 0) {
       // No new ERAs to process
+      console.log("No new ERA files to process");
       await updateLastEraCheck(); // Still update the last check date
       return new Response(
         JSON.stringify({
@@ -264,7 +286,10 @@ Deno.serve(async (req: Request) => {
     
     for (const era of eraIds) {
       const eraId = era.eraId || era.era_id || era.id;
-      if (!eraId) continue;
+      if (!eraId) {
+        console.log("Skipping ERA with no ID");
+        continue;
+      }
       
       console.log(`Processing ERA ID: ${eraId}`);
       const eraDetail = await getEraDetail(eraId);
@@ -278,6 +303,8 @@ Deno.serve(async (req: Request) => {
     
     // Update the last ERA check date
     await updateLastEraCheck();
+    
+    console.log(`ERA processing completed: ${totalProcessed} records, ${totalPayments} payments`);
     
     return new Response(
       JSON.stringify({
