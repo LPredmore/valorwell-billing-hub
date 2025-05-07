@@ -1,4 +1,5 @@
 
+import React from "react";
 import { useEraPaymentData } from "@/hooks/useClaimsData";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -56,6 +57,29 @@ export default function PaymentDetails({ appointmentId }: PaymentDetailsProps) {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString();
   };
+
+  // Format denial details - handle both string and JSON formats
+  const formatDenialDetails = (denialDetails: any) => {
+    if (!denialDetails) return 'Unknown reason';
+    
+    if (typeof denialDetails === 'string') {
+      try {
+        // Try to parse in case it's a JSON string
+        const parsedDetails = JSON.parse(denialDetails);
+        return Array.isArray(parsedDetails) 
+          ? parsedDetails.map(d => d.reason || d.code || JSON.stringify(d)).join('; ')
+          : denialDetails;
+      } catch {
+        // If not valid JSON, return as is
+        return denialDetails;
+      }
+    } else {
+      // Already an object or array
+      return Array.isArray(denialDetails)
+        ? denialDetails.map(d => d.reason || d.code || JSON.stringify(d)).join('; ')
+        : JSON.stringify(denialDetails);
+    }
+  };
   
   return (
     <Card className="mt-4">
@@ -72,9 +96,7 @@ export default function PaymentDetails({ appointmentId }: PaymentDetailsProps) {
               Claim Denied
             </div>
             <p className="text-sm text-red-800">
-              {typeof payment.denial_details_json === 'string' 
-                ? payment.denial_details_json 
-                : JSON.stringify(payment.denial_details_json)}
+              {formatDenialDetails(payment.denial_details_json)}
             </p>
           </div>
         )}

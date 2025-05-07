@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useEraList, useEraRetrieval, useUnreconciledPayments, useReconcilePayment } from "@/hooks/useClaimsData";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -68,7 +68,7 @@ export default function EraManagement() {
   });
   
   // Update form when selected payment changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (selectedPayment) {
       form.reset({
         insurance_paid_amount: selectedPayment.insurance_paid_amount || 0,
@@ -163,7 +163,7 @@ export default function EraManagement() {
                     <TableBody>
                       {unreconciledPayments.map((payment) => (
                         <TableRow key={payment.id}>
-                          <TableCell>{payment.client?.name}</TableCell>
+                          <TableCell>{payment.client_name || 'Unknown'}</TableCell>
                           <TableCell>{formatDate(payment.start_at)}</TableCell>
                           <TableCell>{formatDate(payment.era_payment_date)}</TableCell>
                           <TableCell>{payment.era_check_eft_number || 'N/A'}</TableCell>
@@ -253,7 +253,7 @@ export default function EraManagement() {
                 <h4 className="text-sm font-medium">Payment Details</h4>
                 <div className="grid grid-cols-2 gap-1 text-sm mt-1">
                   <div className="text-muted-foreground">Patient:</div>
-                  <div>{selectedPayment.client?.name}</div>
+                  <div>{selectedPayment.client_name || 'Unknown'}</div>
                   <div className="text-muted-foreground">Date of Service:</div>
                   <div>{formatDate(selectedPayment.start_at)}</div>
                   <div className="text-muted-foreground">ERA ID:</div>

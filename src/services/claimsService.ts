@@ -216,7 +216,14 @@ export const claimsService = {
     try {
       const { data, error } = await supabase
         .from('appointments')
-        .select('*')
+        .select(`
+          *,
+          clients (
+            id,
+            client_first_name,
+            client_last_name
+          )
+        `)
         .not('era_claimmd_id', 'is', null)
         .is('patient_payment_status', null)
         .order('era_payment_date', { ascending: false });
@@ -226,7 +233,19 @@ export const claimsService = {
         throw error;
       }
 
-      return data || [];
+      // Process the data to format the client name directly in the result
+      const processedData = data?.map(appointment => {
+        const clientName = appointment.clients 
+          ? `${appointment.clients.client_first_name || ''} ${appointment.clients.client_last_name || ''}`.trim()
+          : 'Unknown';
+          
+        return {
+          ...appointment,
+          client_name: clientName
+        };
+      });
+
+      return processedData || [];
     } catch (error) {
       console.error("Failed to fetch unreconciled payments:", error);
       throw error;
