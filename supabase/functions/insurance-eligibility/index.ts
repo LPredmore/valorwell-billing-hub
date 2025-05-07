@@ -1,8 +1,10 @@
+
 // Edge function for checking insurance eligibility through Claim.MD API
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { callClaimMdApi } from '../shared/claimmd-api.ts';
+import { formatEligibilityPayload, getClaimMdErrorMessage } from '../shared/claimmd-formatter.ts';
 
 // CORS headers for browser requests
 const corsHeaders = {
@@ -100,50 +102,35 @@ serve(async (req) => {
       console.log(`CLAIMMD_API_KEY environment variable is set (masked: ${maskedKey}), length: ${keyLength} chars`);
     }
     
-    // Prepare eligibility request payload - tailored specifically for Claim.MD's requirements
-    // Keep only the essential fields and ensure proper naming according to their API docs
-    const eligibilityPayload = {
-      // These field names are based exactly on Claim.MD's /services/eligdata/ documentation from their PDF
-      // Provider information - using the field names they expect
-      prov_npi: practiceData.practice_npi,
-      prov_taxid: practiceData.practice_taxid,
-      prov_lname: practiceData.practice_name, // For organizations
-      prov_fname: "",  // Not needed for organization
-      prov_addr1: practiceData.practice_address1,
-      prov_addr2: practiceData.practice_address2 || "",
-      prov_city: practiceData.practice_city,
-      prov_state: practiceData.practice_state,
-      prov_zip: practiceData.practice_zip,
-      
-      // Subscriber/Patient information
-      ins_id: clientData.client_policy_number_primary,
-      ins_name_l: clientData.client_last_name,
-      ins_name_f: clientData.client_first_name,
+    // Log raw client data before transformation
+    console.log('Raw client data for eligibility check:', {
+      clientId: clientId,
+      name: `${clientData.client_first_name} ${clientData.client_last_name}`,
       dob: clientData.client_date_of_birth,
-      gender: clientData.client_gender?.toUpperCase() === 'FEMALE' ? 'F' : 'M',
-      
-      // Payer information
-      payerid: clientData.client_primary_payer_id || "",
-      ins_name: clientData.client_insurance_company_primary,
-      
-      // Service information
-      service_type: "98", // 98 is for Behavioral Health
-      fdos: new Date().toISOString().split('T')[0],  // From Date of Service (current date)
-      tdos: new Date().toISOString().split('T')[0],  // To Date of Service (current date)
-      
-      // Required by Claim.MD docs
-      pat_rel: "SELF", // Relationship to subscriber (SELF, SPOUSE, CHILD, OTHER)
-      request_id: `${clientId.substring(0,8)}-${Date.now()}` // Unique request ID
-    };
+      gender: clientData.client_gender,
+      policy: clientData.client_policy_number_primary,
+      insurance: clientData.client_insurance_company_primary,
+      payerId: clientData.client_primary_payer_id,
+      relationship: clientData.client_subscriber_relationship_primary,
+      subscriberName: clientData.client_subscriber_name_primary,
+      subscriberDob: clientData.client_subscriber_dob_primary
+    });
+
+    // Format data properly for Claim.MD API using our formatter
+    const eligibilityPayload = formatEligibilityPayload(clientData, practiceData);
     
-    // DEBUG logging for key parameters
-    console.log('Eligibility payload prepared:', JSON.stringify(eligibilityPayload));
-    console.log('CRITICAL DEBUG INFO:');
-    console.log(`Client ID: ${clientId}`);
-    console.log(`Patient name: ${eligibilityPayload.ins_name_f} ${eligibilityPayload.ins_name_l}`);
-    console.log(`Insurance ID: ${eligibilityPayload.ins_id}`);
-    console.log(`Insurance name: ${eligibilityPayload.ins_name}`);
-    console.log(`Payer ID: ${eligibilityPayload.payerid}`);
+    // Log transformed data for verification
+    console.log('Transformed payload for Claim.MD:', {
+      ins_id: eligibilityPayload.ins_id,
+      ins_name_f: eligibilityPayload.ins_name_f,
+      ins_name_l: eligibilityPayload.ins_name_l,
+      ins_dob: eligibilityPayload.ins_dob,
+      ins_sex: eligibilityPayload.ins_sex,
+      pat_rel: eligibilityPayload.pat_rel,
+      fdos: eligibilityPayload.fdos,
+      tdos: eligibilityPayload.tdos,
+      payerid: eligibilityPayload.payerid
+    });
     
     // Call Claim.MD API for eligibility check
     const eligibilityResponse = await callClaimMdApi(
@@ -157,6 +144,12 @@ serve(async (req) => {
       const errorDetails = eligibilityResponse.error || 'Unknown API error';
       console.error('Eligibility check failed:', errorDetails);
       
+      // Extract error code if available
+      const errorCode = eligibilityResponse.data?.error?.error_code;
+      const errorMsg = eligibilityResponse.data?.error?.error_mesg;
+      const interpretedError = errorCode ? getClaimMdErrorMessage(errorCode) : 'Unknown API error';
+      const formattedErrorDetails = `${errorMsg || interpretedError} (Code: ${errorCode || 'unknown'})`;
+      
       // Update client record with specific error information
       await supabase
         .from('clients')
@@ -164,17 +157,19 @@ serve(async (req) => {
           eligibility_status_primary: 'Error',
           eligibility_last_checked_primary: new Date().toISOString(),
           eligibility_response_details_primary_json: { 
-            error: errorDetails,
+            error: formattedErrorDetails,
             timestamp: new Date().toISOString(),
-            requestId: Math.random().toString(36).substring(2, 15)
+            requestId: eligibilityPayload.request_id,
+            originalErrorData: eligibilityResponse.data?.error || errorDetails
           }
         })
         .eq('id', clientId);
         
       return new Response(JSON.stringify({ 
         error: 'Eligibility check failed', 
-        details: errorDetails,
-        errorCode: eligibilityResponse.data?.error?.error_code || 'unknown'
+        details: formattedErrorDetails,
+        errorCode: errorCode || 'unknown',
+        userMessage: interpretedError
       }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -245,7 +240,8 @@ serve(async (req) => {
           ...result,
           processed_at: new Date().toISOString(),
           normalized_status: finalStatus,
-          original_status: eligibilityStatus
+          original_status: eligibilityStatus,
+          request_payload: eligibilityPayload
         },
         eligibility_claimmd_id_primary: result.id || null
       })

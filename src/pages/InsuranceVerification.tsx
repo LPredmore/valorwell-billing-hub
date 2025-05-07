@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -65,10 +66,14 @@ const InsuranceVerification = () => {
       
       if (data.error) {
         console.error('Eligibility API error:', data.error);
-        setLastError(data.details || data.error);
+        
+        // Use the user-friendly message if available
+        const errorMessage = data.userMessage || data.details || data.error;
+        setLastError(errorMessage);
+        
         toast({
           title: 'Eligibility Check Error',
-          description: data.details || data.error,
+          description: errorMessage,
           variant: 'destructive',
         });
         return;
@@ -158,6 +163,21 @@ const InsuranceVerification = () => {
     return null;
   };
 
+  // Get formatted request data that was used in the last check
+  const getLastRequestData = (client: any) => {
+    if (client?.eligibility_response_details_primary_json?.request_payload) {
+      const payload = client.eligibility_response_details_primary_json.request_payload;
+      return {
+        policyNumber: payload.ins_id,
+        insuranceName: payload.ins_name,
+        subscriberName: `${payload.ins_name_f} ${payload.ins_name_l}`,
+        payerId: payload.payerid,
+        serviceDate: payload.fdos
+      };
+    }
+    return null;
+  };
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -197,6 +217,7 @@ const InsuranceVerification = () => {
             const errorDetails = getErrorDetails(client);
             const canCheckEligibility = hasRequiredInformation(client);
             const statusIcon = getStatusIcon(client.eligibility_status_primary);
+            const lastRequestData = getLastRequestData(client);
             
             return (
               <Card key={client.id} className={selectedClientId === client.id ? "border-primary" : ""}>
@@ -250,6 +271,15 @@ const InsuranceVerification = () => {
                               : 'N/A'}
                           </span>
                         </div>
+                      </div>
+                    )}
+
+                    {client.eligibility_status_primary === 'Error' && lastRequestData && (
+                      <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-500">
+                        <div className="font-medium mb-1">Last request data:</div>
+                        <div>Policy: {lastRequestData.policyNumber}</div>
+                        <div>Subscriber: {lastRequestData.subscriberName}</div>
+                        <div>Payer ID: {lastRequestData.payerId || 'Not provided'}</div>
                       </div>
                     )}
                   </div>

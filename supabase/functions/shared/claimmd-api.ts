@@ -1,4 +1,3 @@
-
 // Shared utility for interacting with the Claim.MD API
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
@@ -120,16 +119,11 @@ export async function callClaimMdApi(
     console.log(`API URL: ${CLAIMMD_BASE_URL}/${endpoint}`);
     
     // IMPORTANT: Claim.MD requires the AccountKey parameter in the request body with correct casing
-    // Extract all existing properties
-    const requestWithoutApiKey = { ...body };
-    
-    // Create a new object with AccountKey first
+    // Create a new object with AccountKey first, then add all other properties
     const requestWithApiKey = {
-      AccountKey: apiKey  // Add AccountKey with correct casing as first property
+      AccountKey: apiKey,
+      ...body // Add all other parameters after AccountKey
     };
-    
-    // Add all other properties after AccountKey
-    Object.assign(requestWithApiKey, requestWithoutApiKey);
     
     console.log(`Request body before serialization:`, JSON.stringify(requestWithApiKey));
     
@@ -142,9 +136,6 @@ export async function callClaimMdApi(
       // For eligibility endpoints, use application/x-www-form-urlencoded
       requestContentType = 'application/x-www-form-urlencoded';
       
-      // First, flatten complex objects if needed
-      const flattenedParams = flattenObject(requestWithApiKey);
-      
       // IMPORTANT: Create URLSearchParams with AccountKey as the first parameter
       const formData = new URLSearchParams();
       
@@ -152,9 +143,9 @@ export async function callClaimMdApi(
       formData.append('AccountKey', apiKey);
       
       // Then add all other parameters
-      Object.entries(flattenedParams).forEach(([key, value]) => {
+      Object.entries(body).forEach(([key, value]) => {
         if (key !== 'AccountKey') {  // Skip AccountKey as we've already added it
-          formData.append(key, value);
+          formData.append(key, value as string);
         }
       });
       
@@ -232,6 +223,20 @@ export async function callClaimMdApi(
                 const errorMsg = responseData.error.error_mesg || 'Unknown API error';
                 errorMessage = `Claim.MD API Error: ${errorMsg} (Code: ${errorCode})`;
                 console.error(errorMessage);
+              } 
+              
+              // Special handling for eligibility response which may have errors in a nested structure
+              if (responseData && responseData.elig && responseData.elig.error) {
+                const errorCode = responseData.elig.error[0]?.error_code || 'unknown';
+                const errorMsg = responseData.elig.error[0]?.error_mesg || 'Unknown API error';
+                errorMessage = `Claim.MD API Error: ${errorMsg} (Code: ${errorCode})`;
+                console.error(errorMessage);
+                
+                // Keep the data structure but mark it as an error for consistent handling
+                responseData.error = {
+                  error_code: errorCode,
+                  error_mesg: errorMsg
+                };
               }
             } catch (jsonErr) {
               console.error('Failed to parse as JSON despite content type:', jsonErr);
