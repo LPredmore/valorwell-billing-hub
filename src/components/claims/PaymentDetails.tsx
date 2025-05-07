@@ -13,6 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { toast } from "@/hooks/use-toast";
 
 interface PaymentDetailsProps {
   appointmentId: string;
@@ -78,6 +79,17 @@ export default function PaymentDetails({ appointmentId }: PaymentDetailsProps) {
       return Array.isArray(denialDetails)
         ? denialDetails.map(d => d.reason || d.code || JSON.stringify(d)).join('; ')
         : JSON.stringify(denialDetails);
+    }
+  };
+  
+  const handleViewAdjustmentDetails = () => {
+    if (!payment.insurance_adjustment_details_json) {
+      toast({
+        title: "No adjustment details",
+        description: "There are no adjustment details available for this payment.",
+        variant: "destructive",
+      });
+      return;
     }
   };
   

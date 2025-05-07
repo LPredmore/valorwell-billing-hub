@@ -28,6 +28,7 @@ async function getLastEraCheck(): Promise<string> {
       .single();
     
     if (error || !data) {
+      console.error('Error retrieving last ERA check date:', error);
       // Default to 30 days ago if no date is found
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
