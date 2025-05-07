@@ -1,18 +1,21 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ClipboardList, Filter, RefreshCcw, FileText, AlertCircle } from "lucide-react";
+import { ClipboardList, Filter, RefreshCcw, FileText, AlertCircle, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBillableAppointments, useClaimStatusUpdates, useEraRetrieval } from "@/hooks/useClaimsData";
 import BillingQueue from "@/components/claims/BillingQueue";
 import ClaimDetail from "@/components/claims/ClaimDetail";
 import ClaimBatch from "@/components/claims/ClaimBatch";
+import EraManagement from "@/components/claims/EraManagement";
 
 export default function Claims() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
   const [selectedAppointmentIds, setSelectedAppointmentIds] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState("billing");
   
   const {
     data: billableAppointments,
@@ -128,66 +131,85 @@ export default function Claims() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Billing Queue */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-3">
-            <CardTitle>Billing Queue</CardTitle>
-            <CardDescription>Appointments ready for claim submission</CardDescription>
-            <div className="flex items-center space-x-2 mt-2">
-              <div className="relative flex-1">
-                <Input
-                  placeholder="Search appointments..."
-                  value={searchQuery}
-                  onChange={handleSearch}
-                  className="pl-8"
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="billing" className="flex items-center gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Claim Preparation
+          </TabsTrigger>
+          <TabsTrigger value="payments" className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4" />
+            Payment Processing
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="billing" className="mt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Billing Queue */}
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-3">
+                <CardTitle>Billing Queue</CardTitle>
+                <CardDescription>Appointments ready for claim submission</CardDescription>
+                <div className="flex items-center space-x-2 mt-2">
+                  <div className="relative flex-1">
+                    <Input
+                      placeholder="Search appointments..."
+                      value={searchQuery}
+                      onChange={handleSearch}
+                      className="pl-8"
+                    />
+                    <Filter className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <BillingQueue
+                  appointments={filteredAppointments || []}
+                  isLoading={isLoading}
+                  error={error}
+                  selectedAppointmentId={selectedAppointmentId}
+                  onAppointmentSelect={handleAppointmentSelect}
+                  selectedAppointmentIds={selectedAppointmentIds}
+                  onAppointmentToggle={handleAppointmentToggle}
+                  onSelectAll={handleSelectAll}
                 />
-                <Filter className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <BillingQueue
-              appointments={filteredAppointments || []}
-              isLoading={isLoading}
-              error={error}
-              selectedAppointmentId={selectedAppointmentId}
-              onAppointmentSelect={handleAppointmentSelect}
-              selectedAppointmentIds={selectedAppointmentIds}
-              onAppointmentToggle={handleAppointmentToggle}
-              onSelectAll={handleSelectAll}
-            />
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
-        {/* Claim Detail and Batch Submission */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle>Claim Details</CardTitle>
-            <CardDescription>Review and prepare claim for submission</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {selectedAppointmentId ? (
-              <ClaimDetail
-                appointmentId={selectedAppointmentId}
-                onClose={() => setSelectedAppointmentId(null)}
-              />
-            ) : (
-              <div className="text-center p-4 text-muted-foreground">
-                <p>Select an appointment to view claim details</p>
-              </div>
-            )}
-            
-            <ClaimBatch
-              selectedAppointmentIds={selectedAppointmentIds}
-              onSuccess={() => {
-                setSelectedAppointmentIds([]);
-                refetch();
-              }}
-            />
-          </CardContent>
-        </Card>
-      </div>
+            {/* Claim Detail and Batch Submission */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle>Claim Details</CardTitle>
+                <CardDescription>Review and prepare claim for submission</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {selectedAppointmentId ? (
+                  <ClaimDetail
+                    appointmentId={selectedAppointmentId}
+                    onClose={() => setSelectedAppointmentId(null)}
+                  />
+                ) : (
+                  <div className="text-center p-4 text-muted-foreground">
+                    <p>Select an appointment to view claim details</p>
+                  </div>
+                )}
+                
+                <ClaimBatch
+                  selectedAppointmentIds={selectedAppointmentIds}
+                  onSuccess={() => {
+                    setSelectedAppointmentIds([]);
+                    refetch();
+                  }}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="payments" className="mt-4">
+          <EraManagement />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

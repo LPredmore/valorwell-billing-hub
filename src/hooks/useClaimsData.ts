@@ -141,3 +141,57 @@ export function useEraRetrieval() {
     }
   });
 }
+
+/**
+ * Hook to fetch all ERA files processed
+ */
+export function useEraList() {
+  return useQuery({
+    queryKey: ['eraList'],
+    queryFn: () => claimsService.getEraList(),
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Hook to fetch payments requiring reconciliation
+ */
+export function useUnreconciledPayments() {
+  return useQuery({
+    queryKey: ['unreconciledPayments'],
+    queryFn: () => claimsService.getUnreconciledPayments(),
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Hook to manually reconcile a payment
+ */
+export function useReconcilePayment() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ 
+      appointmentId, 
+      paymentData 
+    }: { 
+      appointmentId: string, 
+      paymentData: any 
+    }) => claimsService.updatePaymentInfo(appointmentId, paymentData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['unreconciledPayments'] });
+      queryClient.invalidateQueries({ queryKey: ['billableAppointments'] });
+      toast({
+        title: "Payment reconciled",
+        description: "The payment has been successfully reconciled.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to reconcile payment",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+      });
+    }
+  });
+}

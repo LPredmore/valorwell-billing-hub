@@ -12,7 +12,7 @@ const Index = () => {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   
   // Fetch clients for demonstration
-  const { data: clients, isLoading: isLoadingClients } = useQuery({
+  const { data: clients, isLoading: isLoadingClients, refetch } = useQuery({
     queryKey: ['clients'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -55,7 +55,7 @@ const Index = () => {
       });
       
       // Refresh the client data
-      await clients?.refetch();
+      await refetch();
       
     } catch (err) {
       console.error('Error checking eligibility:', err);

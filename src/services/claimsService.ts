@@ -174,6 +174,66 @@ export const claimsService = {
   },
 
   /**
+   * Gets a list of all processed ERA files
+   */
+  async getEraList() {
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          era_claimmd_id,
+          era_payment_date,
+          era_check_eft_number,
+          insurance_paid_amount
+        `)
+        .not('era_claimmd_id', 'is', null)
+        .order('era_payment_date', { ascending: false });
+
+      if (error) {
+        console.error("Error fetching ERA list:", error);
+        throw error;
+      }
+
+      // Group by era_claimmd_id to get unique ERA files
+      const eraMap = new Map();
+      data?.forEach(item => {
+        if (!eraMap.has(item.era_claimmd_id)) {
+          eraMap.set(item.era_claimmd_id, item);
+        }
+      });
+
+      return Array.from(eraMap.values());
+    } catch (error) {
+      console.error("Failed to fetch ERA list:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Gets appointments with payments that need reconciliation
+   */
+  async getUnreconciledPayments() {
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .not('era_claimmd_id', 'is', null)
+        .is('patient_payment_status', null)
+        .order('era_payment_date', { ascending: false });
+
+      if (error) {
+        console.error("Error fetching unreconciled payments:", error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Failed to fetch unreconciled payments:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Updates payment information for an appointment
    */
   async updatePaymentInfo(appointmentId: string, paymentInfo: {
