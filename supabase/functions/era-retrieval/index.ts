@@ -91,19 +91,19 @@ async function findAppointmentByClaimId(claimId: string): Promise<string | null>
 async function updateAppointmentWithEraData(appointmentId: string, paymentData: any): Promise<void> {
   try {
     const updateData: Record<string, any> = {
-      era_claimmd_id: paymentData.claimId || paymentData.claim_id,
+      era_claimmd_id: paymentData.eraId || paymentData.era_id || paymentData.claimId || paymentData.claim_id,
       claim_status: 'Payment Received',
       claim_status_last_checked: new Date().toISOString()
     };
     
     // Add payment info if available
-    if (paymentData.paidAmount) {
-      updateData.insurance_paid_amount = parseFloat(paymentData.paidAmount);
+    if (paymentData.paidAmount || paymentData.paid_amount) {
+      updateData.insurance_paid_amount = parseFloat(paymentData.paidAmount || paymentData.paid_amount);
     }
     
     // Add adjustment info if available
-    if (paymentData.adjustmentAmount) {
-      updateData.insurance_adjustment_amount = parseFloat(paymentData.adjustmentAmount);
+    if (paymentData.adjustmentAmount || paymentData.adjustment_amount) {
+      updateData.insurance_adjustment_amount = parseFloat(paymentData.adjustmentAmount || paymentData.adjustment_amount);
     }
     
     // Add detailed adjustment info if available
@@ -112,24 +112,25 @@ async function updateAppointmentWithEraData(appointmentId: string, paymentData: 
     }
     
     // Add patient responsibility if available
-    if (paymentData.patientResponsibility) {
-      updateData.patient_responsibility_amount = parseFloat(paymentData.patientResponsibility);
+    if (paymentData.patientResponsibility || paymentData.patient_responsibility) {
+      updateData.patient_responsibility_amount = parseFloat(paymentData.patientResponsibility || paymentData.patient_responsibility);
     }
     
     // Add payment date if available
-    if (paymentData.paymentDate) {
-      updateData.era_payment_date = paymentData.paymentDate;
+    if (paymentData.paymentDate || paymentData.payment_date) {
+      updateData.era_payment_date = paymentData.paymentDate || paymentData.payment_date;
     }
     
     // Add check/EFT number if available
-    if (paymentData.checkNumber || paymentData.eftNumber) {
-      updateData.era_check_eft_number = paymentData.checkNumber || paymentData.eftNumber;
+    if (paymentData.checkNumber || paymentData.check_number || paymentData.eftNumber || paymentData.eft_number) {
+      updateData.era_check_eft_number = paymentData.checkNumber || paymentData.check_number || 
+                                      paymentData.eftNumber || paymentData.eft_number;
     }
     
     // Handle denial
     if (paymentData.denied) {
       updateData.claim_status = 'Denied';
-      updateData.denial_details_json = paymentData.denialReasons;
+      updateData.denial_details_json = paymentData.denialReasons || paymentData.denial_reasons;
       updateData.requires_billing_review = true;
     }
     
@@ -147,7 +148,7 @@ async function updateAppointmentWithEraData(appointmentId: string, paymentData: 
   }
 }
 
-// Process ERA file and update appointments
+// Process ERA data and update appointments
 async function processEraData(eraData: any): Promise<{ processedCount: number; paymentCount: number; }> {
   let processedCount = 0;
   let paymentCount = 0;
@@ -172,6 +173,25 @@ async function processEraData(eraData: any): Promise<{ processedCount: number; p
   return { processedCount, paymentCount };
 }
 
+// Get detailed ERA data for a specific ERA ID
+async function getEraDetail(eraId: string): Promise<any> {
+  const result = await callClaimMdApi(
+    'eradata', 
+    {
+      EraId: eraId,
+      Format: 'JSON'  // Request JSON format as per documentation
+    },
+    null
+  );
+  
+  if (!result.success) {
+    console.error(`Failed to fetch detail for ERA ${eraId}:`, result.error);
+    return null;
+  }
+  
+  return result.data;
+}
+
 // Handle all requests to this function
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight requests
@@ -193,53 +213,92 @@ Deno.serve(async (req: Request) => {
     console.log(`Retrieving ERAs since: ${lastCheckDate}`);
     
     // Add debugging info to check environment variables
-    console.log(`API Key exists: ${!!Deno.env.get('CLAIMMD_API_KEY')}`); 
+    console.log(`API Key exists: ${!!Deno.env.get('CLAIMMD_API_KEY')}`);
     
-    // Call the Claim.MD API to get ERA files
-    const result = await callClaimMdApi(
-      'era', 
-      { 
+    // Step 1: First call the eralist endpoint to get available ERAs
+    // Use the documented format from the Claim.MD API v1.17 PDF
+    const eraListResult = await callClaimMdApi(
+      'eralist',
+      {
         FromDate: lastCheckDate,
-        ToDate: new Date().toISOString().split('T')[0] // Today
+        ToDate: new Date().toISOString().split('T')[0], // Today
+        IncludeProcessed: false // Only get unprocessed ERAs
       },
-      null // No client ID association for this operation
+      null
     );
     
-    if (!result.success) {
-      console.error('ERA retrieval failed:', result.error);
+    if (!eraListResult.success) {
+      console.error('ERA list retrieval failed:', eraListResult.error);
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Failed to retrieve ERA files', 
-          details: result.error 
+        JSON.stringify({
+          success: false,
+          error: 'Failed to retrieve ERA list',
+          details: eraListResult.error,
+          data: eraListResult.data // Include any data that might help diagnose
         }),
         { headers: { 'Content-Type': 'application/json', ...corsHeaders }, status: 500 }
       );
     }
     
-    // Process the ERA data to update appointments
-    const { processedCount, paymentCount } = await processEraData(result.data);
+    // Check if we have ERA IDs to process
+    const eraIds = eraListResult.data?.eras || [];
+    if (!eraIds || eraIds.length === 0) {
+      // No new ERAs to process
+      await updateLastEraCheck(); // Still update the last check date
+      return new Response(
+        JSON.stringify({
+          success: true,
+          processedCount: 0,
+          paymentCount: 0,
+          message: "No new ERA files to process"
+        }),
+        { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
+    
+    console.log(`Found ${eraIds.length} ERA files to process`);
+    
+    // Step 2: For each ERA ID, get the detailed ERA data
+    let totalProcessed = 0;
+    let totalPayments = 0;
+    
+    for (const era of eraIds) {
+      const eraId = era.eraId || era.era_id || era.id;
+      if (!eraId) continue;
+      
+      console.log(`Processing ERA ID: ${eraId}`);
+      const eraDetail = await getEraDetail(eraId);
+      
+      if (eraDetail) {
+        const { processedCount, paymentCount } = await processEraData(eraDetail);
+        totalProcessed += processedCount;
+        totalPayments += paymentCount;
+      }
+    }
     
     // Update the last ERA check date
     await updateLastEraCheck();
     
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        processedCount,
-        paymentCount,
-        message: `Successfully processed ${processedCount} ERA records with ${paymentCount} payments`
+      JSON.stringify({
+        success: true,
+        processedCount: totalProcessed,
+        paymentCount: totalPayments,
+        message: `Successfully processed ${totalProcessed} ERA records with ${totalPayments} payments`
       }),
       { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     );
     
   } catch (err) {
     console.error('Unexpected error in era-retrieval function:', err);
+    const errorMessage = err instanceof Error ? 
+      `${err.name}: ${err.message}${err.stack ? '\nStack: ' + err.stack : ''}` : 
+      String(err);
     
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: err instanceof Error ? err.message : String(err)
+        error: errorMessage
       }),
       { headers: { 'Content-Type': 'application/json', ...corsHeaders }, status: 500 }
     );

@@ -3,7 +3,8 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
-const CLAIMMD_BASE_URL = 'https://apiv2.claim.md/api/Workspace';
+// Updated API base URL per documentation v1.17
+const CLAIMMD_BASE_URL = 'https://svc.claim.md/services';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') as string;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string;
 
@@ -12,7 +13,6 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // Helper function to get API key from environment
 function getApiKey(): string {
-  // Changed from CLAIM.MD_API_KEY (with period) to CLAIMMD_API_KEY (without period)
   const apiKey = Deno.env.get('CLAIMMD_API_KEY');
   if (!apiKey) {
     throw new Error('Missing CLAIMMD_API_KEY environment variable');
@@ -44,13 +44,18 @@ async function logApiInteraction(endpoint: string, request: any, response: any, 
 export async function callClaimMdApi(
   endpoint: string,
   body: any,
-  clientId: string | null = null
+  clientId: string | null = null,
+  timeout: number = 30000 // 30 second default timeout
 ): Promise<{ success: boolean; data?: any; error?: string }> {
   const apiKey = getApiKey();
   const startTime = performance.now();
   
   try {
     console.log(`Calling Claim.MD API: ${endpoint}`);
+    console.log(`Request body:`, JSON.stringify(body));
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
     
     const response = await fetch(`${CLAIMMD_BASE_URL}/${endpoint}`, {
       method: 'POST',
@@ -59,10 +64,25 @@ export async function callClaimMdApi(
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
     
+    clearTimeout(timeoutId);
+    
     const processingTime = Math.round(performance.now() - startTime);
-    const responseData = await response.json();
+    
+    // Try to parse response as JSON
+    let responseData;
+    try {
+      responseData = await response.json();
+    } catch (err) {
+      const text = await response.text();
+      console.error('Failed to parse response as JSON:', text);
+      responseData = { raw: text };
+    }
+    
+    console.log(`API response status: ${response.status}`);
+    console.log(`API response:`, JSON.stringify(responseData).substring(0, 500) + '...');
     
     // Log the API interaction
     if (response.ok) {
@@ -87,11 +107,15 @@ export async function callClaimMdApi(
         clientId,
         processingTime
       );
-      return { success: false, error: errorMessage };
+      return { success: false, error: errorMessage, data: responseData };
     }
   } catch (error) {
     const processingTime = Math.round(performance.now() - startTime);
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = error instanceof Error ? 
+      `${error.name}: ${error.message}${error.stack ? '\nStack: ' + error.stack : ''}` : 
+      String(error);
+    
+    console.error(`API error for ${endpoint}:`, errorMessage);
     
     await logApiInteraction(
       endpoint,
