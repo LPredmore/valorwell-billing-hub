@@ -73,6 +73,17 @@ serve(async (req) => {
       });
     }
     
+    // Validate required client insurance information
+    if (!clientData.client_policy_number_primary || !clientData.client_insurance_company_primary) {
+      return new Response(JSON.stringify({ 
+        error: 'Missing required client insurance information',
+        details: 'Policy number and insurance company are required for eligibility checks'
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    
     // Prepare eligibility request payload
     const eligibilityPayload = {
       provider: {
@@ -112,6 +123,8 @@ serve(async (req) => {
       serviceDateTo: new Date().toISOString().split('T')[0]
     };
     
+    console.log('Eligibility payload prepared:', JSON.stringify(eligibilityPayload));
+    
     // Call Claim.MD API for eligibility check
     const eligibilityResponse = await callClaimMdApi(
       'EligibilityInquiry',
@@ -120,9 +133,22 @@ serve(async (req) => {
     );
     
     if (!eligibilityResponse.success) {
+      const errorDetails = eligibilityResponse.error || 'Unknown API error';
+      console.error('Eligibility check failed:', errorDetails);
+      
+      // Update client record with error information
+      await supabase
+        .from('clients')
+        .update({
+          eligibility_status_primary: 'Error',
+          eligibility_last_checked_primary: new Date().toISOString(),
+          eligibility_response_details_primary_json: { error: errorDetails }
+        })
+        .eq('id', clientId);
+        
       return new Response(JSON.stringify({ 
         error: 'Eligibility check failed', 
-        details: eligibilityResponse.error 
+        details: errorDetails 
       }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -131,12 +157,15 @@ serve(async (req) => {
     
     // Process the eligibility response
     const result = eligibilityResponse.data;
+    console.log('Raw eligibility response:', JSON.stringify(result));
     
     // Extract key eligibility information
     const eligibilityStatus = result.eligibilityStatus || 'Unknown';
     const copay = result.benefitsInformation?.copayAmount || null;
     const deductible = result.benefitsInformation?.deductibleAmount || null;
     const coinsurancePercent = result.benefitsInformation?.coinsurancePercentage || null;
+    
+    console.log(`Extracted eligibility status: ${eligibilityStatus}`);
     
     // Update client record with eligibility information
     const { error: updateError } = await supabase

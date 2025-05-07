@@ -13,6 +13,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // Helper function to get API key from environment
 function getApiKey(): string {
+  // We need to get the key from the CLAIMMD_API_KEY environment variable
+  // as specified in the instructions
   const apiKey = Deno.env.get('CLAIMMD_API_KEY');
   if (!apiKey) {
     throw new Error('Missing CLAIMMD_API_KEY environment variable');
@@ -93,7 +95,15 @@ export async function callClaimMdApi(
   try {
     console.log(`Calling Claim.MD API: ${endpoint}`);
     console.log(`API URL: ${CLAIMMD_BASE_URL}/${endpoint}`);
-    console.log(`Request body:`, JSON.stringify(body));
+    
+    // Add the AccountKey parameter to the request body as required by Claim.MD API
+    // This is based on the Claim.MD API.pdf documentation
+    const requestBody = {
+      ...body,
+      AccountKey: apiKey,  // Add AccountKey parameter using the API key
+    };
+    
+    console.log(`Request body:`, JSON.stringify(requestBody));
     
     const makeRequest = async () => {
       const controller = new AbortController();
@@ -104,10 +114,9 @@ export async function callClaimMdApi(
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
             'Accept': 'application/json' // Prefer JSON responses if available
           },
-          body: JSON.stringify(body),
+          body: JSON.stringify(requestBody),
           signal: controller.signal,
         });
         
@@ -132,6 +141,12 @@ export async function callClaimMdApi(
             try {
               responseData = await response.json();
               console.log(`Parsed JSON response successfully`);
+              
+              // Check for Claim.MD specific error structures - even with HTTP 200 status
+              if (responseData && (responseData.error_code || responseData.error_mesg)) {
+                errorMessage = `Claim.MD API Error: ${responseData.error_mesg || 'Unknown error'} (Code: ${responseData.error_code || 'N/A'})`;
+                console.error(errorMessage);
+              }
             } catch (jsonErr) {
               console.error('Failed to parse as JSON despite content type:', jsonErr);
               // Fallback to text parsing
@@ -140,7 +155,6 @@ export async function callClaimMdApi(
             }
           } else if (responseType === 'xml') {
             // For XML, just store as text for now
-            // In future we could implement XML parsing if needed
             const text = await response.text();
             console.log(`Received XML response, storing as text (first 500 chars): ${text.substring(0, 500)}`);
             responseData = { 
@@ -170,16 +184,16 @@ export async function callClaimMdApi(
           errorMessage = `Failed to parse response: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`;
         }
         
-        // Determine success based on HTTP status
-        const success = response.ok;
-        if (!success) {
+        // Determine success based on HTTP status and Claim.MD error data
+        const success = response.ok && !errorMessage;
+        if (!success && !errorMessage) {
           errorMessage = `API returned status ${response.status} ${response.statusText}`;
         }
         
         // Log the API interaction
         await logApiInteraction(
           endpoint,
-          body,
+          requestBody,
           responseData,
           success ? 'success' : 'error',
           errorMessage,
@@ -210,7 +224,7 @@ export async function callClaimMdApi(
     
     await logApiInteraction(
       endpoint,
-      body,
+      { ...body, AccountKey: apiKey },
       null,
       'exception',
       errorMessage,

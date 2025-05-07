@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 
 const InsuranceVerification = () => {
   const { toast } = useToast();
@@ -18,7 +18,7 @@ const InsuranceVerification = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
-        .select('id, client_first_name, client_last_name, client_insurance_company_primary, eligibility_last_checked_primary, eligibility_status_primary')
+        .select('id, client_first_name, client_last_name, client_insurance_company_primary, client_policy_number_primary, eligibility_last_checked_primary, eligibility_status_primary')
         .order('client_last_name', { ascending: true });
         
       if (error) throw error;
@@ -32,6 +32,18 @@ const InsuranceVerification = () => {
       setIsChecking(true);
       setSelectedClientId(clientId);
       
+      // Find selected client to verify required information
+      const client = clients?.find(c => c.id === clientId);
+      
+      if (!client?.client_policy_number_primary) {
+        toast({
+          title: 'Missing Information',
+          description: 'Client policy number is required for eligibility verification',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
       // Call our edge function
       const { data, error } = await supabase.functions.invoke('insurance-eligibility', {
         body: { clientId },
@@ -42,6 +54,16 @@ const InsuranceVerification = () => {
         toast({
           title: 'Eligibility Check Failed',
           description: error.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      if (data.error) {
+        console.error('Eligibility API error:', data.error);
+        toast({
+          title: 'Eligibility Check Error',
+          description: data.details || data.error,
           variant: 'destructive',
         });
         return;
@@ -82,10 +104,27 @@ const InsuranceVerification = () => {
       case 'active':
         return 'text-green-600';
       case 'inactive':
+      case 'error':
         return 'text-red-600';
       default:
         return 'text-yellow-600';
     }
+  };
+
+  // Check if client has all required insurance info for eligibility check
+  const hasRequiredInformation = (client: any) => {
+    return client.client_insurance_company_primary && client.client_policy_number_primary;
+  };
+
+  // Get warning message if client is missing required insurance info
+  const getMissingInfoWarning = (client: any) => {
+    if (!client.client_insurance_company_primary) {
+      return "Missing insurance company";
+    }
+    if (!client.client_policy_number_primary) {
+      return "Missing policy number";
+    }
+    return null;
   };
 
   return (
@@ -112,47 +151,60 @@ const InsuranceVerification = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {clients?.map((client) => (
-            <Card key={client.id} className={selectedClientId === client.id ? "border-primary" : ""}>
-              <CardHeader>
-                <CardTitle>{client.client_first_name} {client.client_last_name}</CardTitle>
-                <CardDescription>{client.client_insurance_company_primary || 'No insurance on file'}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="font-medium">Status:</span>
-                    <span className={getStatusColor(client.eligibility_status_primary)}>
-                      {client.eligibility_status_primary || 'Unknown'}
-                    </span>
+          {clients?.map((client) => {
+            const warningMessage = getMissingInfoWarning(client);
+            const canCheckEligibility = hasRequiredInformation(client);
+            
+            return (
+              <Card key={client.id} className={selectedClientId === client.id ? "border-primary" : ""}>
+                <CardHeader>
+                  <CardTitle>{client.client_first_name} {client.client_last_name}</CardTitle>
+                  <CardDescription>{client.client_insurance_company_primary || 'No insurance on file'}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {warningMessage && (
+                      <div className="flex items-center text-amber-600 text-sm mb-2">
+                        <AlertCircle className="h-4 w-4 mr-1" />
+                        <span>{warningMessage}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="font-medium">Status:</span>
+                      <span className={getStatusColor(client.eligibility_status_primary)}>
+                        {client.eligibility_status_primary || 'Unknown'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium">Last checked:</span>
+                      <span className="text-gray-600">{formatDate(client.eligibility_last_checked_primary)}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium">Last checked:</span>
-                    <span className="text-gray-600">{formatDate(client.eligibility_last_checked_primary)}</span>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button 
-                  onClick={() => checkEligibility(client.id)} 
-                  disabled={isChecking && selectedClientId === client.id || !client.client_insurance_company_primary}
-                  className="w-full"
-                  variant={client.eligibility_status_primary ? "outline" : "default"}
-                >
-                  {isChecking && selectedClientId === client.id ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Checking...
-                    </>
-                  ) : client.eligibility_status_primary ? (
-                    'Recheck Eligibility'
-                  ) : (
-                    'Check Eligibility'
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
+                </CardContent>
+                <CardFooter>
+                  <Button 
+                    onClick={() => checkEligibility(client.id)} 
+                    disabled={isChecking && selectedClientId === client.id || !canCheckEligibility}
+                    className="w-full"
+                    variant={client.eligibility_status_primary ? "outline" : "default"}
+                  >
+                    {isChecking && selectedClientId === client.id ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Checking...
+                      </>
+                    ) : !canCheckEligibility ? (
+                      'Missing Insurance Info'
+                    ) : client.eligibility_status_primary ? (
+                      'Recheck Eligibility'
+                    ) : (
+                      'Check Eligibility'
+                    )}
+                  </Button>
+                </CardFooter>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
