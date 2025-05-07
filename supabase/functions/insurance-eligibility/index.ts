@@ -84,48 +84,48 @@ serve(async (req) => {
       });
     }
     
-    // Prepare eligibility request payload
+    // Prepare eligibility request payload - simplified to match Claim.MD's expected format
+    // This avoids deep nested objects that might not be properly formatted in x-www-form-urlencoded
     const eligibilityPayload = {
-      provider: {
-        npi: practiceData.practice_npi,
-        taxId: practiceData.practice_taxid,
-        firstName: "", // Not needed for organization
-        lastName: practiceData.practice_name,
-        organizationName: practiceData.practice_name,
-        address: {
-          address1: practiceData.practice_address1,
-          address2: practiceData.practice_address2 || "",
-          city: practiceData.practice_city,
-          state: practiceData.practice_state,
-          zip: practiceData.practice_zip
-        }
-      },
-      subscriber: {
-        memberId: clientData.client_policy_number_primary,
-        firstName: clientData.client_first_name,
-        lastName: clientData.client_last_name,
-        dateOfBirth: clientData.client_date_of_birth,
-        gender: clientData.client_gender?.toUpperCase() === 'FEMALE' ? 'F' : 'M', // Claim.MD expects 'M' or 'F'
-        address: {
-          address1: "", // We don't have these fields, but API might require them
-          city: "",
-          state: clientData.client_state || "",
-          zip: ""
-        }
-      },
-      dependent: null, // Not checking for dependents
-      payer: {
-        payerId: clientData.client_primary_payer_id,
-        name: clientData.client_insurance_company_primary
-      },
-      serviceTypes: ["98"], // 98 is for Behavioral Health
+      // Provider information
+      providerNpi: practiceData.practice_npi,
+      providerTaxId: practiceData.practice_taxid,
+      providerFirstName: "", // Not needed for organization
+      providerLastName: practiceData.practice_name,
+      providerOrganizationName: practiceData.practice_name,
+      providerAddress1: practiceData.practice_address1,
+      providerAddress2: practiceData.practice_address2 || "",
+      providerCity: practiceData.practice_city,
+      providerState: practiceData.practice_state,
+      providerZip: practiceData.practice_zip,
+      
+      // Subscriber information
+      subscriberMemberId: clientData.client_policy_number_primary,
+      subscriberFirstName: clientData.client_first_name,
+      subscriberLastName: clientData.client_last_name,
+      subscriberDateOfBirth: clientData.client_date_of_birth,
+      subscriberGender: clientData.client_gender?.toUpperCase() === 'FEMALE' ? 'F' : 'M', // Claim.MD expects 'M' or 'F'
+      subscriberAddress1: "", 
+      subscriberCity: "",
+      subscriberState: clientData.client_state || "",
+      subscriberZip: "",
+      
+      // Payer information
+      payerId: clientData.client_primary_payer_id,
+      payerName: clientData.client_insurance_company_primary,
+      
+      // Service information
+      serviceTypes: "98", // 98 is for Behavioral Health
       serviceDateFrom: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
-      serviceDateTo: new Date().toISOString().split('T')[0]
+      serviceDateTo: new Date().toISOString().split('T')[0],
+      
+      // No dependent information needed
+      isDependentRequest: "false"
     };
     
     console.log('Eligibility payload prepared:', JSON.stringify(eligibilityPayload));
     
-    // Call Claim.MD API for eligibility check - now with improved error handling
+    // Call Claim.MD API for eligibility check
     const eligibilityResponse = await callClaimMdApi(
       'EligibilityInquiry',
       eligibilityPayload,
@@ -161,7 +161,7 @@ serve(async (req) => {
       });
     }
     
-    // Process the eligibility response - now with better validation
+    // Process the eligibility response
     const result = eligibilityResponse.data;
     console.log('Raw eligibility response:', JSON.stringify(result));
     

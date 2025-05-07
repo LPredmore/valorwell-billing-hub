@@ -82,6 +82,29 @@ function getResponseType(response: Response): 'json' | 'xml' | 'text' {
   }
 }
 
+// Helper function to flatten complex objects for URLSearchParams
+function flattenObject(obj: any, prefix = ''): Record<string, string> {
+  return Object.keys(obj).reduce((acc: Record<string, string>, k) => {
+    const pre = prefix.length ? prefix + '.' : '';
+    if (typeof obj[k] === 'object' && obj[k] !== null && !Array.isArray(obj[k])) {
+      Object.assign(acc, flattenObject(obj[k], pre + k));
+    } else if (Array.isArray(obj[k])) {
+      // Handle arrays properly - Claim.MD may expect specific formatting for arrays
+      obj[k].forEach((item: any, i: number) => {
+        if (typeof item === 'object' && item !== null) {
+          Object.assign(acc, flattenObject(item, `${pre}${k}[${i}]`));
+        } else {
+          acc[`${pre}${k}[${i}]`] = String(item);
+        }
+      });
+    } else {
+      // Ensure values are strings
+      acc[pre + k] = obj[k] === null || obj[k] === undefined ? '' : String(obj[k]);
+    }
+    return acc;
+  }, {});
+}
+
 // The main function to call Claim.MD API endpoints
 export async function callClaimMdApi(
   endpoint: string,
@@ -96,14 +119,39 @@ export async function callClaimMdApi(
     console.log(`Calling Claim.MD API: ${endpoint}`);
     console.log(`API URL: ${CLAIMMD_BASE_URL}/${endpoint}`);
     
-    // IMPORTANT: Claim.MD requires the AccountKey parameter in the request body
-    // (not as a header or query parameter)
-    const requestBody = {
+    // IMPORTANT: Claim.MD requires the AccountKey parameter in the request body with correct casing
+    const requestWithApiKey = {
       ...body,
-      AccountKey: apiKey,  // Add AccountKey parameter using the API key with correct casing
+      AccountKey: apiKey  // Add AccountKey with correct casing
     };
     
-    console.log(`Request body before serialization:`, JSON.stringify(requestBody));
+    console.log(`Request body before serialization:`, JSON.stringify(requestWithApiKey));
+    
+    // Use different request handling based on the endpoint needs
+    const isEligibilityEndpoint = endpoint.toLowerCase().includes('eligibility');
+    let requestContentType: string;
+    let serializedBody: string | FormData | URLSearchParams;
+    
+    if (isEligibilityEndpoint) {
+      // For eligibility endpoints, use application/x-www-form-urlencoded
+      requestContentType = 'application/x-www-form-urlencoded';
+      
+      // First, flatten complex objects if needed
+      const flattenedParams = flattenObject(requestWithApiKey);
+      
+      // Create URLSearchParams for form encoding
+      const formData = new URLSearchParams();
+      Object.entries(flattenedParams).forEach(([key, value]) => {
+        formData.append(key, value);
+      });
+      
+      serializedBody = formData;
+      console.log(`Using form-urlencoded format. Serialized request body:`, formData.toString());
+    } else {
+      // For other endpoints, default to JSON
+      requestContentType = 'application/json';
+      serializedBody = JSON.stringify(requestWithApiKey);
+    }
     
     const makeRequest = async () => {
       const controller = new AbortController();
@@ -113,10 +161,10 @@ export async function callClaimMdApi(
         const response = await fetch(`${CLAIMMD_BASE_URL}/${endpoint}`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': requestContentType,
             'Accept': 'application/json' // Prefer JSON responses if available
           },
-          body: JSON.stringify(requestBody),
+          body: serializedBody,
           signal: controller.signal,
         });
         
@@ -131,11 +179,13 @@ export async function callClaimMdApi(
         const responseType = getResponseType(response);
         console.log(`Response content type determined to be: ${responseType}`);
         
-        // Handle the response based on status code and content type
+        // Always get the raw text for logging
+        let responseText = await response.text();
+        console.log(`Raw API response (first 500 chars): ${responseText.substring(0, 500)}`);
+        
+        // Handle the response based on content type
         let responseData;
         let errorMessage = null;
-        let responseText = await response.text(); // Always get the raw text for logging
-        console.log(`Raw API response (first 500 chars): ${responseText.substring(0, 500)}`);
         
         try {
           // Process response based on content type
@@ -198,7 +248,7 @@ export async function callClaimMdApi(
         // Log the API interaction
         await logApiInteraction(
           endpoint,
-          requestBody,
+          isEligibilityEndpoint ? serializedBody.toString() : requestWithApiKey,
           responseData,
           success ? 'success' : 'error',
           errorMessage,
@@ -229,7 +279,7 @@ export async function callClaimMdApi(
     
     await logApiInteraction(
       endpoint,
-      { ...body, AccountKey: apiKey },
+      body,
       null,
       'exception',
       errorMessage,
