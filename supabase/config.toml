@@ -3,3 +3,9 @@ project_id = "gqlkritspnhjxfejvgfg"
 
 [functions.insurance-eligibility]
 verify_jwt = true
+
+[functions.get-billable-appointments]
+verify_jwt = true
+
+[functions.claim-submission]
+verify_jwt = true

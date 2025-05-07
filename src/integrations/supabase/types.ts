@@ -68,10 +68,9 @@ export type Database = {
           clinician_id: string
           cpt_code: string | null
           created_at: string
-          date: string
           denial_details_json: Json | null
           diagnosis_code_pointers: string | null
-          end_time: string
+          end_at: string
           era_check_eft_number: string | null
           era_claimmd_id: string | null
           era_payment_date: string | null
@@ -89,7 +88,7 @@ export type Database = {
           place_of_service_code: string | null
           recurring_group_id: string | null
           requires_billing_review: boolean | null
-          start_time: string
+          start_at: string
           status: string
           stripe_charge_ids: string[] | null
           type: string
@@ -110,10 +109,9 @@ export type Database = {
           clinician_id: string
           cpt_code?: string | null
           created_at?: string
-          date: string
           denial_details_json?: Json | null
           diagnosis_code_pointers?: string | null
-          end_time: string
+          end_at: string
           era_check_eft_number?: string | null
           era_claimmd_id?: string | null
           era_payment_date?: string | null
@@ -131,7 +129,7 @@ export type Database = {
           place_of_service_code?: string | null
           recurring_group_id?: string | null
           requires_billing_review?: boolean | null
-          start_time: string
+          start_at: string
           status?: string
           stripe_charge_ids?: string[] | null
           type: string
@@ -152,10 +150,9 @@ export type Database = {
           clinician_id?: string
           cpt_code?: string | null
           created_at?: string
-          date?: string
           denial_details_json?: Json | null
           diagnosis_code_pointers?: string | null
-          end_time?: string
+          end_at?: string
           era_check_eft_number?: string | null
           era_claimmd_id?: string | null
           era_payment_date?: string | null
@@ -173,7 +170,7 @@ export type Database = {
           place_of_service_code?: string | null
           recurring_group_id?: string | null
           requires_billing_review?: boolean | null
-          start_time?: string
+          start_at?: string
           status?: string
           stripe_charge_ids?: string[] | null
           type?: string
@@ -190,6 +187,47 @@ export type Database = {
           },
           {
             foreignKeyName: "appointments_clinician_id_fkey"
+            columns: ["clinician_id"]
+            isOneToOne: false
+            referencedRelation: "clinicians"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      availability_blocks: {
+        Row: {
+          clinician_id: string
+          created_at: string
+          end_at: string
+          id: string
+          is_active: boolean
+          recurring_pattern: Json | null
+          start_at: string
+          updated_at: string
+        }
+        Insert: {
+          clinician_id: string
+          created_at?: string
+          end_at: string
+          id?: string
+          is_active?: boolean
+          recurring_pattern?: Json | null
+          start_at: string
+          updated_at?: string
+        }
+        Update: {
+          clinician_id?: string
+          created_at?: string
+          end_at?: string
+          id?: string
+          is_active?: boolean
+          recurring_pattern?: Json | null
+          start_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "availability_blocks_clinician_id_fkey"
             columns: ["clinician_id"]
             isOneToOne: false
             referencedRelation: "clinicians"
@@ -1057,6 +1095,7 @@ export type Database = {
           clinician_taxonomy_code: string | null
           clinician_temppassword: string | null
           clinician_time_granularity: string | null
+          clinician_time_zone: string | null
           clinician_timezone: string[] | null
           clinician_treatment_approaches: string[] | null
           clinician_type: string | null
@@ -1149,6 +1188,7 @@ export type Database = {
           clinician_taxonomy_code?: string | null
           clinician_temppassword?: string | null
           clinician_time_granularity?: string | null
+          clinician_time_zone?: string | null
           clinician_timezone?: string[] | null
           clinician_treatment_approaches?: string[] | null
           clinician_type?: string | null
@@ -1241,6 +1281,7 @@ export type Database = {
           clinician_taxonomy_code?: string | null
           clinician_temppassword?: string | null
           clinician_time_granularity?: string | null
+          clinician_time_zone?: string | null
           clinician_timezone?: string[] | null
           clinician_treatment_approaches?: string[] | null
           clinician_type?: string | null
@@ -2070,6 +2111,10 @@ export type Database = {
       check_table_exists: {
         Args: { check_table_name: string }
         Returns: boolean
+      }
+      convert_appointment_times_to_utc: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       create_or_replace_check_table_exists_function: {
         Args: Record<PropertyKey, never>

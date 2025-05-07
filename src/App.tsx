@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import Patients from "./pages/Patients";
+import Claims from "./pages/Claims";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,10 +39,7 @@ const App = () => (
           } />
           <Route path="/claims" element={
             <DashboardLayout>
-              <div className="p-6">
-                <h1 className="text-2xl font-bold mb-4">Claims Management</h1>
-                <p>This page is under construction.</p>
-              </div>
+              <Claims />
             </DashboardLayout>
           } />
           <Route path="/payments" element={
