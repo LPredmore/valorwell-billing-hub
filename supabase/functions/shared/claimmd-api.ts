@@ -12,9 +12,10 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // Helper function to get API key from environment
 function getApiKey(): string {
-  const apiKey = Deno.env.get('CLAIM.MD_API_KEY');
+  // Changed from CLAIM.MD_API_KEY (with period) to CLAIMMD_API_KEY (without period)
+  const apiKey = Deno.env.get('CLAIMMD_API_KEY');
   if (!apiKey) {
-    throw new Error('Missing CLAIM.MD_API_KEY environment variable');
+    throw new Error('Missing CLAIMMD_API_KEY environment variable');
   }
   return apiKey;
 }

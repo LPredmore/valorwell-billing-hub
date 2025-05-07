@@ -192,6 +192,9 @@ Deno.serve(async (req: Request) => {
     const lastCheckDate = await getLastEraCheck();
     console.log(`Retrieving ERAs since: ${lastCheckDate}`);
     
+    // Add debugging info to check environment variables
+    console.log(`API Key exists: ${!!Deno.env.get('CLAIMMD_API_KEY')}`); 
+    
     // Call the Claim.MD API to get ERA files
     const result = await callClaimMdApi(
       'era', 
@@ -203,6 +206,7 @@ Deno.serve(async (req: Request) => {
     );
     
     if (!result.success) {
+      console.error('ERA retrieval failed:', result.error);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -233,7 +237,10 @@ Deno.serve(async (req: Request) => {
     console.error('Unexpected error in era-retrieval function:', err);
     
     return new Response(
-      JSON.stringify({ success: false, error: err.message }),
+      JSON.stringify({ 
+        success: false, 
+        error: err instanceof Error ? err.message : String(err)
+      }),
       { headers: { 'Content-Type': 'application/json', ...corsHeaders }, status: 500 }
     );
   }
