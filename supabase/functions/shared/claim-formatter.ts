@@ -46,6 +46,12 @@ interface Client {
   client_subscriber_dob_primary?: string;
   client_subscriber_relationship_primary?: string;
   client_diagnosis?: string[];
+  // Adding client address fields which might be in the database
+  client_address1?: string;
+  client_address2?: string;
+  client_city?: string;
+  client_state?: string;
+  client_zip?: string;
 }
 
 interface Practice {
@@ -74,33 +80,40 @@ interface ClaimMDPayload {
   fileid: string;
   claim: Array<{
     claim_id: string;
-    pat_first_name: string;
-    pat_last_name: string;
+    pcn: string; // Patient Account/Control Number - Required
+    pat_name_f: string;
+    pat_name_l: string;
     pat_dob: string; // YYYY-MM-DD format
-    pat_gender: string; // M or F
-    pat_address1?: string;
-    pat_city?: string;
-    pat_state?: string;
-    pat_zip?: string;
-    sub_first_name: string;
-    sub_last_name: string;
-    sub_dob: string; // YYYY-MM-DD format
-    sub_rel: string; // Relationship code
-    sub_id: string;
-    sub_group?: string;
+    pat_sex: string; // M or F
+    pat_addr_1: string;
+    pat_city: string;
+    pat_state: string;
+    pat_zip: string;
+    ins_name_f: string;
+    ins_name_l: string;
+    ins_dob: string; // YYYY-MM-DD format
+    pat_rel: string; // Relationship code
+    ins_number: string;
+    ins_group?: string;
+    ins_addr_1: string;
+    ins_city: string;
+    ins_state: string;
+    ins_zip: string;
     payer_name: string;
     payer_id?: string;
     bill_taxid: string;
+    bill_taxid_type: string; // Required - EIN or SSN
     bill_npi: string;
     bill_name: string;
     bill_taxonomy: string;
-    bill_address1: string;
-    bill_address2?: string;
+    bill_addr_1: string;
+    bill_addr_2?: string;
     bill_city: string;
     bill_state: string;
     bill_zip: string;
     prov_npi: string;
-    prov_name: string;
+    prov_name_f: string; // First name of rendering provider
+    prov_name_l: string; // Last name of rendering provider
     prov_taxonomy?: string;
     diag_1?: string;
     diag_2?: string;
@@ -114,16 +127,19 @@ interface ClaimMDPayload {
     diag_10?: string;
     diag_11?: string;
     diag_12?: string;
+    total_charge: string; // Total charge amount as string
+    accept_assign: string; // Y/N
     charge: Array<{
       from_date: string; // YYYY-MM-DD format
       thru_date: string; // YYYY-MM-DD format
-      cpt: string;
+      proc_code: string; // Procedure code instead of cpt
       mod_1?: string;
       mod_2?: string;
       mod_3?: string;
       mod_4?: string;
-      pos: string;
+      place_of_service: string; // Full field name instead of pos
       diag_ref: string;
+      units: string; // Required - number of units as string
       charge: string; // Amount as string
     }>;
   }>;
@@ -288,44 +304,81 @@ export function formatClaimJSON(data: {
   // Correct typo in the practice city from "Sherdan" to "Sheridan"
   const practiceCity = practice.practice_city === "Sherdan" ? "Sheridan" : practice.practice_city;
   
+  // Split provider name into first and last name
+  const providerNameParts = clinician.clinician_first_name && clinician.clinician_last_name ? 
+    [clinician.clinician_first_name, clinician.clinician_last_name] : 
+    (clinician.clinician_first_name || '').split(' ');
+  
+  const providerFirstName = providerNameParts[0] || 'Unknown';
+  const providerLastName = providerNameParts.length > 1 ? providerNameParts.slice(1).join(' ') : 'Provider';
+  
+  // Split subscriber name into first and last name if available
+  let subscriberFirstName = client.client_first_name || '';
+  let subscriberLastName = client.client_last_name || '';
+  
+  if (client.client_subscriber_name_primary) {
+    const parts = client.client_subscriber_name_primary.split(' ');
+    subscriberFirstName = parts[0] || subscriberFirstName;
+    subscriberLastName = parts.length > 1 ? parts.slice(1).join(' ') : subscriberLastName;
+  }
+  
+  // Calculate total charge amount from service lines
+  const chargeAmount = appointment.billed_amount || 0;
+  const totalChargeString = chargeAmount.toFixed(2); // Format as "150.00"
+  
+  // Default addresses if client address is not available
+  const clientAddr1 = client.client_address1 || practice.practice_address1 || "123 Main St";
+  const clientCity = client.client_city || practice.practice_city || "Anytown";
+  const clientState = client.client_state || practice.practice_state || "NY";
+  const clientZip = client.client_zip || practice.practice_zip || "10001";
+  
   // Create a single claim object with the exact structure Claim.MD expects
   const claimObject = {
     claim_id: appointment.id,
-    pat_first_name: client.client_first_name,
-    pat_last_name: client.client_last_name,
-    pat_dob: formatClaimMdDate(client.client_date_of_birth),
-    pat_gender: formatGender(client.client_gender),
+    pcn: appointment.id, // Using appointment ID as patient control number
     
-    // Subscriber information
-    sub_first_name: client.client_subscriber_name_primary ? 
-      client.client_subscriber_name_primary.split(' ')[0] : 
-      client.client_first_name,
-    sub_last_name: client.client_subscriber_name_primary ? 
-      client.client_subscriber_name_primary.split(' ').slice(1).join(' ') : 
-      client.client_last_name,
-    sub_dob: formatClaimMdDate(client.client_subscriber_dob_primary || client.client_date_of_birth),
-    sub_rel: mapRelationshipToCode(client.client_subscriber_relationship_primary),
-    sub_id: client.client_policy_number_primary || '',
-    sub_group: client.client_group_number_primary || undefined,
+    // Patient information
+    pat_name_f: client.client_first_name,
+    pat_name_l: client.client_last_name,
+    pat_dob: formatClaimMdDate(client.client_date_of_birth),
+    pat_sex: formatGender(client.client_gender),
+    pat_addr_1: clientAddr1,
+    pat_city: clientCity,
+    pat_state: clientState,
+    pat_zip: clientZip,
+    
+    // Subscriber/Insured information
+    ins_name_f: subscriberFirstName,
+    ins_name_l: subscriberLastName,
+    ins_dob: formatClaimMdDate(client.client_subscriber_dob_primary || client.client_date_of_birth),
+    pat_rel: mapRelationshipToCode(client.client_subscriber_relationship_primary),
+    ins_number: client.client_policy_number_primary || 'UNKNOWN',
+    ins_group: client.client_group_number_primary || undefined,
+    ins_addr_1: clientAddr1,
+    ins_city: clientCity,
+    ins_state: clientState,
+    ins_zip: clientZip,
     
     // Payer information
     payer_name: client.client_insurance_company_primary || 'Unknown',
-    payer_id: client.client_primary_payer_id || undefined,
+    payer_id: client.client_primary_payer_id || '',
     
     // Billing provider information (using bill_ prefix)
     bill_taxid: formatTaxId(practice.practice_taxid),
+    bill_taxid_type: "EIN", // Default to Employer ID Number
     bill_npi: practice.practice_npi,
     bill_name: practice.practice_name,
     bill_taxonomy: practice.practice_taxonomy,
-    bill_address1: practice.practice_address1,
-    bill_address2: practice.practice_address2 || undefined,
+    bill_addr_1: practice.practice_address1,
+    bill_addr_2: practice.practice_address2 || undefined,
     bill_city: practiceCity,
     bill_state: practice.practice_state,
     bill_zip: practice.practice_zip,
     
     // Rendering provider information (using prov_ prefix)
     prov_npi: clinician.clinician_npi_number || practice.practice_npi,
-    prov_name: `${clinician.clinician_first_name} ${clinician.clinician_last_name}`,
+    prov_name_f: providerFirstName,
+    prov_name_l: providerLastName,
     prov_taxonomy: clinician.clinician_taxonomy_code || practice.practice_taxonomy,
     
     // Diagnosis codes
@@ -342,19 +395,26 @@ export function formatClaimJSON(data: {
     ...(diagnoses.length >= 11 && { diag_11: diagnoses[10] }),
     ...(diagnoses.length >= 12 && { diag_12: diagnoses[11] }),
     
+    // Accept Assignment - required field
+    accept_assign: "Y",
+    
+    // Total charge amount - required field
+    total_charge: totalChargeString,
+    
     // Service/charge information
     charge: [
       {
         from_date: serviceDate,
         thru_date: serviceDate, // Same as from_date for single-day services
-        cpt: appointment.cpt_code,
+        proc_code: appointment.cpt_code,
         ...(modifiers.length >= 1 && { mod_1: modifiers[0] }),
         ...(modifiers.length >= 2 && { mod_2: modifiers[1] }),
         ...(modifiers.length >= 3 && { mod_3: modifiers[2] }),
         ...(modifiers.length >= 4 && { mod_4: modifiers[3] }),
-        pos: appointment.place_of_service_code || '11', // Default to office (11)
+        place_of_service: appointment.place_of_service_code || '11', // Default to office (11)
         diag_ref: diagnosisPointers.join(','),
-        charge: (appointment.billed_amount || 0).toString() // Format as string
+        units: "1", // Default to 1 unit - required field
+        charge: chargeAmount.toFixed(2) // Format as string with 2 decimal places
       }
     ]
   };
@@ -392,19 +452,19 @@ export function formatClaimCSV(data: {
   // This would need to be expanded based on the exact CSV format required by Claim.MD
   const csvRow = [
     json.claim_id,
-    json.pat_first_name,
-    json.pat_last_name,
+    json.pat_name_f,
+    json.pat_name_l,
     json.pat_dob,
-    json.pat_gender,
-    json.sub_id,
-    json.sub_group || '',
+    json.pat_sex,
+    json.ins_number,
+    json.ins_group || '',
     json.payer_name,
     json.payer_id || '',
     json.bill_npi,
     json.charge[0].from_date,
-    json.charge[0].cpt,
+    json.charge[0].proc_code,
     [json.charge[0].mod_1, json.charge[0].mod_2, json.charge[0].mod_3, json.charge[0].mod_4].filter(Boolean).join('|'),
-    json.charge[0].pos,
+    json.charge[0].place_of_service,
     json.charge[0].charge,
     [json.diag_1, json.diag_2, json.diag_3, json.diag_4].filter(Boolean).join('|')
   ].join(',');
@@ -424,17 +484,17 @@ export function formatClaimBatchCSV(claimDataArray: Array<{
   // Define CSV header
   const csvHeader = [
     'claim_id',
-    'pat_first_name',
-    'pat_last_name',
+    'pat_name_f',
+    'pat_name_l',
     'pat_dob',
-    'pat_gender',
-    'sub_id',
-    'sub_group',
+    'pat_sex',
+    'ins_number',
+    'ins_group',
     'payer_name',
     'payer_id',
     'provider_npi',
     'service_date',
-    'cpt_code',
+    'proc_code',
     'modifiers',
     'place_of_service',
     'charge_amount',
@@ -447,3 +507,4 @@ export function formatClaimBatchCSV(claimDataArray: Array<{
   // Combine header and rows
   return [csvHeader, ...csvRows].join('\n');
 }
+

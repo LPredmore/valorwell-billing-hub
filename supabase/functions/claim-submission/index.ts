@@ -89,12 +89,12 @@ Deno.serve(async (req: Request) => {
     // Log some key details about each claim for debugging
     jsonClaims.forEach((claim, index) => {
       console.log(`Claim #${index + 1} ID: ${claim.claim_id}`);
-      console.log(`  Patient: ${claim.pat_first_name} ${claim.pat_last_name}`);
+      console.log(`  Patient: ${claim.pat_name_f} ${claim.pat_name_l}`);
       console.log(`  Patient DOB: ${claim.pat_dob}`);
-      console.log(`  Gender: ${claim.pat_gender}`);
-      console.log(`  Relationship: ${claim.sub_rel}`);
-      console.log(`  Service: ${claim.charge[0].cpt} from ${claim.charge[0].from_date} to ${claim.charge[0].thru_date}`);
-      console.log(`  POS: ${claim.charge[0].pos}`);
+      console.log(`  Gender: ${claim.pat_sex}`);
+      console.log(`  Relationship: ${claim.pat_rel}`);
+      console.log(`  Service: ${claim.charge[0].proc_code} from ${claim.charge[0].from_date} to ${claim.charge[0].thru_date}`);
+      console.log(`  POS: ${claim.charge[0].place_of_service}`);
       console.log(`  Modifiers: ${[claim.charge[0].mod_1, claim.charge[0].mod_2, claim.charge[0].mod_3, claim.charge[0].mod_4].filter(Boolean).join(', ') || 'None'}`);
       console.log(`  Diagnosis: ${[claim.diag_1, claim.diag_2, claim.diag_3, claim.diag_4].filter(Boolean).join(', ') || 'None'}`);
       console.log(`  Amount: ${claim.charge[0].charge}`);
@@ -131,33 +131,53 @@ Deno.serve(async (req: Request) => {
     const submissionResult = result.data;
     console.log('Successful submission result:', JSON.stringify(submissionResult));
     
+    // Check for batch ID or claim IDs in the response
     const batchId = submissionResult.batchId || submissionResult.batch_id;
+    let claimProcessingResult = submissionResult.claim || [];
     
-    if (!batchId) {
+    if (claimProcessingResult.length > 0) {
+      // Check if any claims were rejected
+      const rejectedClaims = claimProcessingResult.filter(claim => claim.status === 'R');
+      if (rejectedClaims.length > 0) {
+        // Some claims were rejected, but we still got a response
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Claims were rejected by Claim.MD', 
+            details: rejectedClaims,
+            claimData: claimProcessingResult
+          }),
+          { headers: { 'Content-Type': 'application/json', ...corsHeaders }, status: 400 }
+        );
+      }
+    }
+    
+    if (!batchId && (!claimProcessingResult || claimProcessingResult.length === 0)) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'No batch ID returned from Claim.MD', 
+          error: 'No batch ID or claim IDs returned from Claim.MD', 
           response: submissionResult 
         }),
         { headers: { 'Content-Type': 'application/json', ...corsHeaders }, status: 500 }
       );
     }
     
+    // Extract claim IDs from the response if present
+    const claimIds = claimProcessingResult.map(claim => claim.claimmd_id || claim.claim_id || '');
+    
     // Update each appointment with claim submission details
     const updateResults = [];
     
     for (let i = 0; i < claimData.length; i++) {
       const appointment = claimData[i].appointment;
-      const claimId = submissionResult.claims?.[i]?.claimId || 
-                      submissionResult.claims?.[i]?.claim_id ||
-                      `pending-${appointment.id}`;
+      const claimId = claimIds[i] || batchId ? `${batchId}-${i+1}` : `pending-${appointment.id}`;
       
       const { data, error } = await supabase
         .from('appointments')
         .update({
           claim_claimmd_id: claimId,
-          claim_claimmd_batch_id: batchId,
+          claim_claimmd_batch_id: batchId || null,
           claim_status: 'Submitted to Clearinghouse',
           claim_last_submission_date: new Date().toISOString(),
           claim_response_json: submissionResult

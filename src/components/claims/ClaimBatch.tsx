@@ -39,10 +39,14 @@ export default function ClaimBatch({ selectedAppointmentIds, onSuccess }: ClaimB
         setShowResultDialog(true);
         onSuccess();
       },
-      onError: (error) => {
+      onError: (error: any) => {
+        // Check if the error includes detailed rejection information
+        const errorDetails = error.response?.data?.details || error.response?.data?.claimData || [];
+        
         setSubmissionResult({
           success: false,
           error: error instanceof Error ? error.message : "An unknown error occurred",
+          details: errorDetails,
         });
         setShowResultDialog(true);
       },
@@ -101,7 +105,7 @@ export default function ClaimBatch({ selectedAppointmentIds, onSuccess }: ClaimB
 
       {/* Result Dialog */}
       <AlertDialog open={showResultDialog} onOpenChange={setShowResultDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               {submissionResult?.success ? (
@@ -125,7 +129,28 @@ export default function ClaimBatch({ selectedAppointmentIds, onSuccess }: ClaimB
               ) : (
                 <>
                   <p>There was an error submitting your claims batch:</p>
-                  <p className="text-red-500">{submissionResult?.error}</p>
+                  <p className="text-red-500 font-medium">{submissionResult?.error}</p>
+                  
+                  {/* Display detailed error messages if available */}
+                  {submissionResult?.details && submissionResult.details.length > 0 && (
+                    <div className="mt-4">
+                      <p className="font-medium">Validation Errors:</p>
+                      <div className="mt-2 max-h-60 overflow-y-auto border rounded bg-slate-50 p-3 text-sm">
+                        {Array.isArray(submissionResult.details) ? (
+                          <ul className="list-disc pl-5 space-y-1">
+                            {submissionResult.details.map((item: any, index: number) => (
+                              <li key={index}>
+                                {item.message || item.error || JSON.stringify(item)}
+                                {item.fields && <span className="text-slate-500"> (Field: {item.fields})</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>{JSON.stringify(submissionResult.details, null, 2)}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </AlertDialogDescription>
