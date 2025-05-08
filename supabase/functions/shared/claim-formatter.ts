@@ -1,3 +1,4 @@
+
 // Shared utility for formatting claims for Claim.MD
 
 /**
@@ -264,6 +265,9 @@ export function formatClaimJSON(data: {
   // Handle modifiers - ensure it's an array, not null
   const modifiers = appointment.modifiers || [];
   
+  // Correct typo in the practice city from "Sherdan" to "Sheridan"
+  const practiceCity = practice.practice_city === "Sherdan" ? "Sheridan" : practice.practice_city;
+  
   return {
     claim_id: appointment.id,
     patient: {
@@ -296,7 +300,7 @@ export function formatClaimJSON(data: {
       taxonomy_code: practice.practice_taxonomy,
       address_line_1: practice.practice_address1,
       address_line_2: practice.practice_address2,
-      city: practice.practice_city,
+      city: practiceCity,
       state: practice.practice_state,
       zip_code: practice.practice_zip
     },
