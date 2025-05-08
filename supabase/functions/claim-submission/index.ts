@@ -83,6 +83,17 @@ Deno.serve(async (req: Request) => {
     const jsonClaims = claimData.map(data => formatClaimJSON(data));
     const batchData = formatClaimBatchJSON(jsonClaims);
     
+    // Log the actual data being sent
+    console.log(`Submitting ${jsonClaims.length} claims to Claim.MD`);
+    
+    // Log some key details about each claim for debugging
+    jsonClaims.forEach((claim, index) => {
+      console.log(`Claim #${index + 1} ID: ${claim.claim_id}`);
+      console.log(`  Patient: ${claim.patient.first_name} ${claim.patient.last_name}`);
+      console.log(`  Service: ${claim.services[0].cpt_code} on ${claim.services[0].date_of_service}`);
+      console.log(`  Amount: ${claim.services[0].charge_amount}`);
+    });
+    
     // Submit claims to Claim.MD upload endpoint
     const result = await callClaimMdApi(
       'upload', 
@@ -90,12 +101,16 @@ Deno.serve(async (req: Request) => {
       null // No client ID association for this batch operation
     );
     
+    // Enhanced error logging for troubleshooting
     if (!result.success) {
+      console.error('Claim submission failed with response:', JSON.stringify(result));
+      
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: 'Claim submission failed', 
-          details: result.error 
+          details: result.error,
+          response: result.data || {} // Include any response data for debugging
         }),
         { headers: { 'Content-Type': 'application/json', ...corsHeaders }, status: 500 }
       );
@@ -103,6 +118,8 @@ Deno.serve(async (req: Request) => {
     
     // Process successful response from Claim.MD
     const submissionResult = result.data;
+    console.log('Successful submission result:', JSON.stringify(submissionResult));
+    
     const batchId = submissionResult.batchId || submissionResult.batch_id;
     
     if (!batchId) {
@@ -160,7 +177,11 @@ Deno.serve(async (req: Request) => {
     console.error('Unexpected error in claim-submission function:', err);
     
     return new Response(
-      JSON.stringify({ success: false, error: err.message }),
+      JSON.stringify({ 
+        success: false, 
+        error: err.message,
+        stack: err.stack // Include stack trace for debugging
+      }),
       { headers: { 'Content-Type': 'application/json', ...corsHeaders }, status: 500 }
     );
   }

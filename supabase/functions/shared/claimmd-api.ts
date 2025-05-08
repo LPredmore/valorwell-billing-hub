@@ -240,6 +240,60 @@ export async function callClaimMdApi(
         }
         console.log('=== END REQUEST DETAILS ===');
         
+        // TEMPORARY: Add a console.log to show the current ApiKey
+        console.log(`Using API Key: ${apiKey}`);
+        
+        // Debugging with a simple test request for the 'upload' endpoint
+        if (endpoint === 'upload' && requiresMultipartFormData) {
+          // Create a simple test FormData with just the essential parts
+          const testFormData = new FormData();
+          testFormData.append('AccountKey', apiKey);
+          testFormData.append('File', new Blob(['{"test":"simple test data"}'], {type: 'application/json'}), 'test.json');
+          
+          console.log('SENDING SIMPLE TEST REQUEST WITH MINIMAL DATA TO DEBUG UPLOAD ENDPOINT');
+          
+          // First attempt with the actual request
+          const response = await fetch(`${CLAIMMD_BASE_URL}/${endpoint}`, {
+            method: 'POST',
+            headers,
+            body: serializedBody,
+            signal: controller.signal,
+          });
+          
+          // Add more detailed logging about the response
+          console.log(`Response status: ${response.status} ${response.statusText}`);
+          console.log(`Response headers: ${JSON.stringify(Object.fromEntries([...response.headers.entries()]))}`);
+          
+          // Get raw response text for debugging
+          try {
+            const responseText = await response.text();
+            console.log(`Raw response body: ${responseText}`);
+            
+            // Try to parse as JSON if it looks like JSON
+            if (responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) {
+              try {
+                const responseJson = JSON.parse(responseText);
+                console.log(`Parsed response JSON: ${JSON.stringify(responseJson)}`);
+              } catch (jsonError) {
+                console.log(`Could not parse response as JSON: ${jsonError.message}`);
+              }
+            }
+            
+            clearTimeout(timeoutId);
+            
+            // Recreate a new response since we've consumed the body
+            return { 
+              success: response.ok, 
+              data: responseText.startsWith('{') ? JSON.parse(responseText) : { raw: responseText },
+              ...(response.status >= 400 && { error: `API returned status ${response.status}: ${responseText}` })
+            };
+          } catch (textError) {
+            console.log(`Error reading response text: ${textError.message}`);
+            clearTimeout(timeoutId);
+            throw new Error(`Failed to read response: ${textError.message}`);
+          }
+        }
+        
         const response = await fetch(`${CLAIMMD_BASE_URL}/${endpoint}`, {
           method: 'POST',
           headers,
