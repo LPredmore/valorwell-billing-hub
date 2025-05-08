@@ -1,4 +1,3 @@
-
 // Shared utility for formatting claims for Claim.MD
 
 /**
@@ -46,12 +45,12 @@ interface Client {
   client_subscriber_dob_primary?: string;
   client_subscriber_relationship_primary?: string;
   client_diagnosis?: string[];
-  // Adding client address fields which might be in the database
+  // Client address fields used for claim submissions
   client_address1?: string;
   client_address2?: string;
   client_city?: string;
   client_state?: string;
-  client_zip?: string;
+  client_zipcode?: string; // Note: using client_zipcode instead of client_zip
 }
 
 interface Practice {
@@ -378,7 +377,7 @@ export function formatClaimJSON(data: {
   // Handle modifiers - ensure it's an array, not null
   const modifiers = appointment.modifiers || [];
   
-  // Make sure practice city is correctly spelled (fix any typo)
+  // Make sure practice city is correctly spelled
   const practiceCity = practice.practice_city === "Sherdan" ? "Sheridan" : practice.practice_city;
   
   // Split provider name into first and last name
@@ -403,20 +402,23 @@ export function formatClaimJSON(data: {
   const chargeAmount = appointment.billed_amount || 0;
   const totalChargeString = chargeAmount.toFixed(2); // Format as "150.00"
   
-  // Default addresses if client address is not available
+  // Use client address fields directly from the client table
+  // If missing, fall back to practice address
   const clientAddr1 = client.client_address1 || practice.practice_address1 || "123 Main St";
   const clientCity = client.client_city || practice.practice_city || "Anytown";
   
-  // CRITICAL CHANGE: Ensure state is properly formatted as a two-letter code
+  // Ensure state is properly formatted as a two-letter code
   const clientState = convertStateToAbbreviation(client.client_state || practice.practice_state || "WY");
-  const clientZip = client.client_zip || practice.practice_zip || "10001";
+  // Use client_zipcode instead of client_zip
+  const clientZip = client.client_zipcode || practice.practice_zip || "10001";
   
-  // CRITICAL CHANGE: Log the client's primary payer ID from the database
+  // Log the client's primary payer ID from the database
   console.log(`CRITICAL - Client primary payer ID from database: ${client.client_primary_payer_id || 'NOT SET IN DATABASE'}`);
   
   // Create a single claim object with the exact structure Claim.MD expects
+  // IMPORTANT: Changed claim_id to remote_claimid as requested
   const claimObject = {
-    claim_id: appointment.id,
+    remote_claimid: appointment.id, // Using appointment ID as remote_claimid instead of claim_id
     pcn: appointment.id, // Using appointment ID as patient control number
     
     // Patient information
@@ -425,9 +427,9 @@ export function formatClaimJSON(data: {
     pat_dob: formatClaimMdDate(client.client_date_of_birth),
     pat_sex: formatGender(client.client_gender),
     pat_addr_1: clientAddr1,
-    pat_city: clientCity,
-    pat_state: clientState, // Using two-letter abbreviation
-    pat_zip: clientZip,
+    pat_city: clientCity, // Now directly using client.client_city
+    pat_state: clientState,
+    pat_zip: clientZip, // Now directly using client.client_zipcode
     
     // Subscriber/Insured information
     ins_name_f: subscriberFirstName,
@@ -437,24 +439,24 @@ export function formatClaimJSON(data: {
     ins_number: client.client_policy_number_primary || 'UNKNOWN',
     ins_group: client.client_group_number_primary || undefined,
     ins_addr_1: clientAddr1,
-    ins_city: clientCity,
-    ins_state: clientState, // Using two-letter abbreviation
-    ins_zip: clientZip,
+    ins_city: clientCity, // Now directly using client.client_city
+    ins_state: clientState,
+    ins_zip: clientZip, // Now directly using client.client_zipcode
     
     // Payer information
     payer_name: client.client_insurance_company_primary || 'Unknown',
-    payer_id: client.client_primary_payer_id || '', // CRITICAL: Use the client's payer ID from the database
+    payer_id: client.client_primary_payer_id || '', // Using client's payer ID from the database
     
     // Billing provider information (using bill_ prefix)
     bill_taxid: formatTaxId(practice.practice_taxid),
-    bill_taxid_type: "E", // CRITICAL CHANGE: Always use "E" for Employer ID Number
+    bill_taxid_type: "E", // Always use "E" for Employer ID Number
     bill_npi: practice.practice_npi,
     bill_name: practice.practice_name,
     bill_taxonomy: practice.practice_taxonomy,
     bill_addr_1: practice.practice_address1,
     bill_addr_2: practice.practice_address2 || undefined,
     bill_city: practiceCity,
-    bill_state: convertStateToAbbreviation(practice.practice_state), // Convert to two-letter code
+    bill_state: convertStateToAbbreviation(practice.practice_state),
     bill_zip: practice.practice_zip,
     
     // Rendering provider information (using prov_ prefix)
@@ -533,7 +535,7 @@ export function formatClaimCSV(data: {
   // Format a CSV row based on the JSON data
   // This would need to be expanded based on the exact CSV format required by Claim.MD
   const csvRow = [
-    json.claim_id,
+    json.remote_claimid,
     json.pat_name_f,
     json.pat_name_l,
     json.pat_dob,
@@ -589,4 +591,3 @@ export function formatClaimBatchCSV(claimDataArray: Array<{
   // Combine header and rows
   return [csvHeader, ...csvRows].join('\n');
 }
-
