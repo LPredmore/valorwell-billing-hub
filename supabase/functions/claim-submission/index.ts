@@ -94,9 +94,9 @@ Deno.serve(async (req: Request) => {
       console.log(`  Amount: ${claim.services[0].charge_amount}`);
     });
     
-    // Submit claims to Claim.MD upload endpoint
+    // Submit claims to Claim.MD upload endpoint - ensure endpoint has trailing slash
     const result = await callClaimMdApi(
-      'upload', 
+      'upload/', // Modified endpoint to include trailing slash
       { claims: batchData.claims },
       null // No client ID association for this batch operation
     );
