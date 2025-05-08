@@ -9,6 +9,39 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      admins: {
+        Row: {
+          admin_email: string
+          admin_first_name: string | null
+          admin_last_name: string | null
+          admin_phone: string | null
+          admin_status: string | null
+          created_at: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          admin_email: string
+          admin_first_name?: string | null
+          admin_last_name?: string | null
+          admin_phone?: string | null
+          admin_status?: string | null
+          created_at?: string
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          admin_email?: string
+          admin_first_name?: string | null
+          admin_last_name?: string | null
+          admin_phone?: string | null
+          admin_status?: string | null
+          created_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       api_logs: {
         Row: {
           client_id: string | null
@@ -1498,6 +1531,30 @@ export type Database = {
         }
         Relationships: []
       }
+      migration_logs: {
+        Row: {
+          created_at: string | null
+          description: string
+          details: Json | null
+          id: number
+          migration_name: string
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          details?: Json | null
+          id?: number
+          migration_name: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          details?: Json | null
+          id?: number
+          migration_name?: string
+        }
+        Relationships: []
+      }
       phq9_assessments: {
         Row: {
           additional_notes: string | null
@@ -1607,54 +1664,6 @@ export type Database = {
           practice_taxid?: string | null
           practice_taxonomy?: string | null
           practice_zip?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      profiles: {
-        Row: {
-          created_at: string
-          email: string
-          first_name: string | null
-          google_calendar_last_sync: string | null
-          google_calendar_linked: boolean | null
-          id: string
-          last_name: string | null
-          phone: string | null
-          profile_type: string | null
-          role: Database["public"]["Enums"]["app_role"]
-          temp_password: string | null
-          time_zone: string | null
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          email: string
-          first_name?: string | null
-          google_calendar_last_sync?: string | null
-          google_calendar_linked?: boolean | null
-          id: string
-          last_name?: string | null
-          phone?: string | null
-          profile_type?: string | null
-          role?: Database["public"]["Enums"]["app_role"]
-          temp_password?: string | null
-          time_zone?: string | null
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          email?: string
-          first_name?: string | null
-          google_calendar_last_sync?: string | null
-          google_calendar_linked?: boolean | null
-          id?: string
-          last_name?: string | null
-          phone?: string | null
-          profile_type?: string | null
-          role?: Database["public"]["Enums"]["app_role"]
-          temp_password?: string | null
-          time_zone?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -2177,6 +2186,10 @@ export type Database = {
       standardize_uuid: {
         Args: { input_id: string }
         Returns: string
+      }
+      user_has_admin_role: {
+        Args: { user_id: string }
+        Returns: boolean
       }
     }
     Enums: {

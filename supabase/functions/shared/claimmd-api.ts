@@ -1,3 +1,4 @@
+
 // Shared utility for interacting with the Claim.MD API
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
@@ -118,7 +119,15 @@ export async function callClaimMdApi(
     console.log(`Calling Claim.MD API: ${endpoint}`);
     console.log(`API URL: ${CLAIMMD_BASE_URL}/${endpoint}`);
     
-    // IMPORTANT: Claim.MD requires the AccountKey parameter in the request body with correct casing
+    // Determine request format based on endpoint
+    const endpointPath = endpoint.toLowerCase();
+    const requiresUrlEncodedData = endpointPath.includes('elig') || endpointPath.includes('eligibility');
+    const requiresMultipartFormData = endpointPath === 'upload';
+    
+    // Log the request format determination
+    console.log(`Request format: ${requiresMultipartFormData ? 'multipart/form-data' : (requiresUrlEncodedData ? 'application/x-www-form-urlencoded' : 'application/json')}`);
+    
+    // IMPORTANT: Claim.MD requires the AccountKey parameter with correct casing
     // Create a new object with AccountKey first, then add all other properties
     const requestWithApiKey = {
       AccountKey: apiKey,
@@ -127,12 +136,11 @@ export async function callClaimMdApi(
     
     console.log(`Request body before serialization:`, JSON.stringify(requestWithApiKey));
     
-    // Use different request handling based on the endpoint needs
-    const isEligibilityEndpoint = endpoint.toLowerCase().includes('eligibility') || endpoint.toLowerCase().includes('elig');
+    // Variables for request configuration
     let requestContentType: string;
     let serializedBody: string | FormData | URLSearchParams;
     
-    if (isEligibilityEndpoint) {
+    if (requiresUrlEncodedData) {
       // For eligibility endpoints, use application/x-www-form-urlencoded
       requestContentType = 'application/x-www-form-urlencoded';
       
@@ -160,6 +168,43 @@ export async function callClaimMdApi(
       if (!rawRequestBody.startsWith('AccountKey=')) {
         console.warn('WARNING: AccountKey is NOT the first parameter in the request body!');
       }
+    } else if (requiresMultipartFormData) {
+      // For upload endpoint, use multipart/form-data
+      // Do NOT manually set Content-Type - it will be automatically set with boundary
+      requestContentType = 'multipart/form-data';
+      
+      // Create FormData object
+      const formData = new FormData();
+      
+      // Add AccountKey as the first parameter
+      formData.append('AccountKey', apiKey);
+      
+      // For upload endpoint, the claim data needs to be added as a File/Blob
+      if (typeof body.claims === 'object') {
+        // Convert claims to JSON string
+        const claimsJson = JSON.stringify(body.claims);
+        const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '');
+        const filename = `claims_batch_${timestamp}.json`;
+        
+        // Create a Blob with the JSON data
+        const claimsBlob = new Blob([claimsJson], { type: 'application/json' });
+        
+        // Append as File parameter per API docs
+        formData.append('File', claimsBlob, filename);
+        
+        console.log(`Appending claims data as File with filename: ${filename}, size: ${claimsJson.length} bytes`);
+      } else {
+        console.warn('WARNING: Claims data not found or not in expected format');
+        // Fallback to sending as stringified JSON directly
+        formData.append('File', JSON.stringify(body), 'claims.json');
+      }
+      
+      serializedBody = formData;
+      
+      // Log multipart form data parts (we can't log the full serialized body)
+      console.log(`CRITICAL - MULTIPART FORM DATA PARTS:`);
+      console.log(`Part 1: AccountKey=${apiKey}`);
+      console.log(`Part 2: File (claims data as JSON file)`);
     } else {
       // For other endpoints, default to JSON
       requestContentType = 'application/json';
@@ -171,20 +216,33 @@ export async function callClaimMdApi(
       const timeoutId = setTimeout(() => controller.abort(), timeout);
       
       try {
+        // Prepare headers based on request type
+        const headers: Record<string, string> = {
+          'Accept': 'application/json' // Prefer JSON responses if available
+        };
+        
+        // Only set Content-Type for JSON and URL-encoded requests
+        // For multipart/form-data, let the browser/runtime set it automatically with boundary
+        if (!requiresMultipartFormData) {
+          headers['Content-Type'] = requestContentType;
+        }
+        
         // DEBUG: Log request details immediately before fetch
         console.log('=== FULL REQUEST DETAILS ===');
         console.log(`Method: POST`);
         console.log(`URL: ${CLAIMMD_BASE_URL}/${endpoint}`);
-        console.log(`Headers: Content-Type: ${requestContentType}, Accept: application/json`);
-        console.log(`Body: ${typeof serializedBody === 'string' ? serializedBody : serializedBody.toString()}`);
+        console.log(`Headers:`, JSON.stringify(headers));
+        
+        if (!requiresMultipartFormData) {
+          console.log(`Body: ${typeof serializedBody === 'string' ? serializedBody : serializedBody.toString()}`);
+        } else {
+          console.log(`Body: [FormData object with AccountKey and File parts]`);
+        }
         console.log('=== END REQUEST DETAILS ===');
         
         const response = await fetch(`${CLAIMMD_BASE_URL}/${endpoint}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': requestContentType,
-            'Accept': 'application/json' // Prefer JSON responses if available
-          },
+          headers,
           body: serializedBody,
           signal: controller.signal,
         });
@@ -283,7 +341,11 @@ export async function callClaimMdApi(
         // Log the API interaction
         await logApiInteraction(
           endpoint,
-          isEligibilityEndpoint ? typeof serializedBody === 'string' ? serializedBody : serializedBody.toString() : requestWithApiKey,
+          requiresMultipartFormData ? 
+            { type: 'multipart/form-data', parts: ['AccountKey', 'File'] } : 
+            (requiresUrlEncodedData ? 
+              (typeof serializedBody === 'string' ? serializedBody : serializedBody.toString()) : 
+              requestWithApiKey),
           responseData,
           success ? 'success' : 'error',
           errorMessage,
