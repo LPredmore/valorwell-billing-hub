@@ -89,17 +89,17 @@ Deno.serve(async (req: Request) => {
     // Log some key details about each claim for debugging
     jsonClaims.forEach((claim, index) => {
       console.log(`Claim #${index + 1} ID: ${claim.claim_id}`);
-      console.log(`  Patient: ${claim.patient.first_name} ${claim.patient.last_name}`);
-      console.log(`  Patient DOB: ${claim.patient.date_of_birth}`);
-      console.log(`  Gender: ${claim.patient.gender}`);
-      console.log(`  Relationship: ${claim.subscriber.relationship_to_patient}`);
-      console.log(`  Service: ${claim.services[0].cpt_code} on ${claim.services[0].date_of_service}`);
-      console.log(`  POS: ${claim.services[0].place_of_service}`);
-      console.log(`  Modifiers: ${JSON.stringify(claim.services[0].modifiers)}`);
-      console.log(`  Diagnosis: ${JSON.stringify(claim.diagnoses)}`);
-      console.log(`  Amount: ${claim.services[0].charge_amount}`);
-      console.log(`  Tax ID: ${claim.provider.tax_id}`);
-      console.log(`  Provider City: ${claim.provider.city}`);
+      console.log(`  Patient: ${claim.pat_first_name} ${claim.pat_last_name}`);
+      console.log(`  Patient DOB: ${claim.pat_dob}`);
+      console.log(`  Gender: ${claim.pat_gender}`);
+      console.log(`  Relationship: ${claim.sub_rel}`);
+      console.log(`  Service: ${claim.charge[0].cpt} from ${claim.charge[0].from_date} to ${claim.charge[0].thru_date}`);
+      console.log(`  POS: ${claim.charge[0].pos}`);
+      console.log(`  Modifiers: ${[claim.charge[0].mod_1, claim.charge[0].mod_2, claim.charge[0].mod_3, claim.charge[0].mod_4].filter(Boolean).join(', ') || 'None'}`);
+      console.log(`  Diagnosis: ${[claim.diag_1, claim.diag_2, claim.diag_3, claim.diag_4].filter(Boolean).join(', ') || 'None'}`);
+      console.log(`  Amount: ${claim.charge[0].charge}`);
+      console.log(`  Tax ID: ${claim.bill_taxid}`);
+      console.log(`  Provider City: ${claim.bill_city}`);
     });
     
     // Also log the final JSON string for verification
@@ -108,7 +108,7 @@ Deno.serve(async (req: Request) => {
     // Submit claims to Claim.MD upload endpoint - ensure endpoint has trailing slash
     const result = await callClaimMdApi(
       'upload/', 
-      { claims: batchData.claims },
+      batchData,
       null // No client ID association for this batch operation
     );
     
