@@ -1,4 +1,3 @@
-
 // Shared utility for formatting claims for Claim.MD
 
 /**
@@ -121,6 +120,67 @@ interface ClaimJSON {
 }
 
 /**
+ * Formats a date string from YYYY-MM-DD to YYYYMMDD format required by Claim.MD
+ * @param dateString Date string in YYYY-MM-DD format
+ * @returns Date string in YYYYMMDD format
+ */
+function formatClaimMdDate(dateString: string): string {
+  if (!dateString) return '';
+  return dateString.replace(/-/g, '');
+}
+
+/**
+ * Maps relationship value to proper EDI code for Claim.MD
+ * @param relationship Relationship description
+ * @returns EDI relationship code
+ */
+function mapRelationshipToCode(relationship: string | null | undefined): string {
+  if (!relationship) return '18'; // Default to Self
+  
+  const rel = relationship.toLowerCase();
+  if (rel.includes('self')) return '18';  // Self
+  if (rel.includes('spouse')) return '01'; // Spouse
+  if (rel.includes('child')) return '19';  // Child
+  if (rel.includes('other')) return 'G8';  // Other relationship
+  
+  return '18'; // Default to Self if unknown
+}
+
+/**
+ * Formats gender value to M/F format required by Claim.MD
+ * @param gender Gender value
+ * @returns Single character gender code
+ */
+function formatGender(gender: string | null | undefined): string {
+  if (!gender) return 'U';
+  
+  if (gender.toLowerCase().startsWith('f')) return 'F';
+  if (gender.toLowerCase().startsWith('m')) return 'M';
+  
+  return 'U'; // Unknown if not specified
+}
+
+/**
+ * Formats a diagnosis code by removing decimal points and converting to uppercase
+ * @param code ICD-10 diagnosis code
+ * @returns Formatted diagnosis code
+ */
+function formatDiagnosisCode(code: string): string {
+  if (!code) return '';
+  return code.replace('.', '').toUpperCase();
+}
+
+/**
+ * Formats tax ID by removing any hyphens
+ * @param taxId Tax ID with possible hyphens
+ * @returns Clean tax ID without hyphens
+ */
+function formatTaxId(taxId: string | undefined): string {
+  if (!taxId) return '';
+  return taxId.replace(/-/g, '');
+}
+
+/**
  * Fetches all data required for a claim from the appointment ID
  */
 export async function fetchClaimData(appointmentId: string) {
@@ -195,19 +255,22 @@ export function formatClaimJSON(data: {
     ? appointment.diagnosis_code_pointers.split(',').map(p => p.trim())
     : ['1']; // Default to first diagnosis if not specified
   
-  // Format date for claim
-  const serviceDate = formatDate(new Date(appointment.start_at), "yyyy-MM-dd");
+  // Format date for claim in YYYYMMDD format
+  const serviceDate = formatClaimMdDate(formatDate(new Date(appointment.start_at), "yyyy-MM-dd"));
   
-  // Use client's diagnoses or default
-  const diagnoses = client.client_diagnosis || [];
+  // Use client's diagnoses or default, ensuring they're properly formatted
+  const diagnoses = (client.client_diagnosis || []).map(formatDiagnosisCode);
+  
+  // Handle modifiers - ensure it's an array, not null
+  const modifiers = appointment.modifiers || [];
   
   return {
     claim_id: appointment.id,
     patient: {
       first_name: client.client_first_name,
       last_name: client.client_last_name,
-      date_of_birth: client.client_date_of_birth,
-      gender: client.client_gender || 'U' // Default to Unknown if not specified
+      date_of_birth: formatClaimMdDate(client.client_date_of_birth),
+      gender: formatGender(client.client_gender)
     },
     subscriber: {
       // If client is the subscriber, use client info, otherwise use subscriber info
@@ -217,8 +280,8 @@ export function formatClaimJSON(data: {
       last_name: client.client_subscriber_name_primary ? 
         client.client_subscriber_name_primary.split(' ').slice(1).join(' ') : 
         client.client_last_name,
-      date_of_birth: client.client_subscriber_dob_primary || client.client_date_of_birth,
-      relationship_to_patient: client.client_subscriber_relationship_primary || 'SELF',
+      date_of_birth: formatClaimMdDate(client.client_subscriber_dob_primary || client.client_date_of_birth),
+      relationship_to_patient: mapRelationshipToCode(client.client_subscriber_relationship_primary),
       member_id: client.client_policy_number_primary || '',
       group_number: client.client_group_number_primary
     },
@@ -229,7 +292,7 @@ export function formatClaimJSON(data: {
     provider: {
       name: practice.practice_name,
       npi: practice.practice_npi,
-      tax_id: practice.practice_taxid,
+      tax_id: formatTaxId(practice.practice_taxid),
       taxonomy_code: practice.practice_taxonomy,
       address_line_1: practice.practice_address1,
       address_line_2: practice.practice_address2,
@@ -246,7 +309,7 @@ export function formatClaimJSON(data: {
       {
         date_of_service: serviceDate,
         cpt_code: appointment.cpt_code,
-        modifiers: appointment.modifiers,
+        modifiers: modifiers,
         diagnosis_pointers: diagnosisPointers,
         place_of_service: appointment.place_of_service_code || '11', // Default to office (11)
         charge_amount: appointment.billed_amount || 0

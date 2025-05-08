@@ -90,13 +90,24 @@ Deno.serve(async (req: Request) => {
     jsonClaims.forEach((claim, index) => {
       console.log(`Claim #${index + 1} ID: ${claim.claim_id}`);
       console.log(`  Patient: ${claim.patient.first_name} ${claim.patient.last_name}`);
+      console.log(`  Patient DOB: ${claim.patient.date_of_birth}`);
+      console.log(`  Gender: ${claim.patient.gender}`);
+      console.log(`  Relationship: ${claim.subscriber.relationship_to_patient}`);
       console.log(`  Service: ${claim.services[0].cpt_code} on ${claim.services[0].date_of_service}`);
+      console.log(`  POS: ${claim.services[0].place_of_service}`);
+      console.log(`  Modifiers: ${JSON.stringify(claim.services[0].modifiers)}`);
+      console.log(`  Diagnosis: ${JSON.stringify(claim.diagnoses)}`);
       console.log(`  Amount: ${claim.services[0].charge_amount}`);
+      console.log(`  Tax ID: ${claim.provider.tax_id}`);
+      console.log(`  Provider City: ${claim.provider.city}`);
     });
+    
+    // Also log the final JSON string for verification
+    console.log("Full claim batch JSON:", JSON.stringify(batchData, null, 2));
     
     // Submit claims to Claim.MD upload endpoint - ensure endpoint has trailing slash
     const result = await callClaimMdApi(
-      'upload/', // Modified endpoint to include trailing slash
+      'upload/', 
       { claims: batchData.claims },
       null // No client ID association for this batch operation
     );
