@@ -1,3 +1,4 @@
+
 // Shared utility for formatting claims for Claim.MD
 
 /**
@@ -98,7 +99,6 @@ interface ClaimMDPayload {
     ins_city: string;
     ins_state: string;
     ins_zip: string;
-    payer_name: string;
     payer_id?: string;
     bill_taxid: string;
     bill_taxid_type: string; // Required - E or S
@@ -416,9 +416,8 @@ export function formatClaimJSON(data: {
   console.log(`CRITICAL - Client primary payer ID from database: ${client.client_primary_payer_id || 'NOT SET IN DATABASE'}`);
   
   // Create a single claim object with the exact structure Claim.MD expects
-  // IMPORTANT: Changed claim_id to remote_claimid as requested
   const claimObject = {
-    remote_claimid: appointment.id, // Using appointment ID as remote_claimid instead of claim_id
+    remote_claimid: appointment.id, // Using appointment ID as remote_claimid
     pcn: appointment.id, // Using appointment ID as patient control number
     
     // Patient information
@@ -427,9 +426,9 @@ export function formatClaimJSON(data: {
     pat_dob: formatClaimMdDate(client.client_date_of_birth),
     pat_sex: formatGender(client.client_gender),
     pat_addr_1: clientAddr1,
-    pat_city: clientCity, // Now directly using client.client_city
+    pat_city: clientCity, 
     pat_state: clientState,
-    pat_zip: clientZip, // Now directly using client.client_zipcode
+    pat_zip: clientZip,
     
     // Subscriber/Insured information
     ins_name_f: subscriberFirstName,
@@ -439,12 +438,12 @@ export function formatClaimJSON(data: {
     ins_number: client.client_policy_number_primary || 'UNKNOWN',
     ins_group: client.client_group_number_primary || undefined,
     ins_addr_1: clientAddr1,
-    ins_city: clientCity, // Now directly using client.client_city
+    ins_city: clientCity,
     ins_state: clientState,
-    ins_zip: clientZip, // Now directly using client.client_zipcode
+    ins_zip: clientZip,
     
     // Payer information
-    payer_name: client.client_insurance_company_primary || 'Unknown',
+    // REMOVING payer_name as requested to test if this resolves the issue
     payer_id: client.client_primary_payer_id || '', // Using client's payer ID from the database
     
     // Billing provider information (using bill_ prefix)
@@ -503,6 +502,13 @@ export function formatClaimJSON(data: {
     ]
   };
   
+  // Add additional verification logs for address data
+  console.log(`CRITICAL - Verifying address data for client ${client.id}:`);
+  console.log(`  Client Address1: ${clientAddr1}`);
+  console.log(`  Client City: ${clientCity}`);
+  console.log(`  Client State: ${clientState}`);
+  console.log(`  Client Zip: ${clientZip}`);
+  
   return claimObject;
 }
 
@@ -542,7 +548,7 @@ export function formatClaimCSV(data: {
     json.pat_sex,
     json.ins_number,
     json.ins_group || '',
-    json.payer_name,
+    // Remove payer_name field here as well for consistency
     json.payer_id || '',
     json.bill_npi,
     json.charge[0].from_date,
@@ -574,7 +580,7 @@ export function formatClaimBatchCSV(claimDataArray: Array<{
     'pat_sex',
     'ins_number',
     'ins_group',
-    'payer_name',
+    // Remove payer_name field here as well for consistency
     'payer_id',
     'provider_npi',
     'service_date',
@@ -590,4 +596,152 @@ export function formatClaimBatchCSV(claimDataArray: Array<{
   
   // Combine header and rows
   return [csvHeader, ...csvRows].join('\n');
+}
+
+/**
+ * Formats a date string to YYYY-MM-DD format required by Claim.MD
+ * @param dateString Date string in any format
+ * @returns Date string in YYYY-MM-DD format
+ */
+function formatClaimMdDate(dateString: string): string {
+  if (!dateString) return '';
+  
+  try {
+    // Parse the date string
+    const date = new Date(dateString);
+    
+    // Format to YYYY-MM-DD
+    return formatDate(date, "yyyy-MM-dd");
+  } catch (error) {
+    console.error(`Error formatting date ${dateString}:`, error);
+    return '';
+  }
+}
+
+/**
+ * Maps relationship value to proper EDI code for Claim.MD
+ * @param relationship Relationship description
+ * @returns EDI relationship code
+ */
+function mapRelationshipToCode(relationship: string | null | undefined): string {
+  if (!relationship) return '18'; // Default to Self
+  
+  const rel = relationship.toLowerCase();
+  if (rel.includes('self')) return '18';  // Self
+  if (rel.includes('spouse')) return '01'; // Spouse
+  if (rel.includes('child')) return '19';  // Child
+  if (rel.includes('other')) return 'G8';  // Other relationship
+  
+  return '18'; // Default to Self if unknown
+}
+
+/**
+ * Formats gender value to M/F format required by Claim.MD
+ * @param gender Gender value
+ * @returns Single character gender code
+ */
+function formatGender(gender: string | null | undefined): string {
+  if (!gender) return 'U';
+  
+  if (gender.toLowerCase().startsWith('f')) return 'F';
+  if (gender.toLowerCase().startsWith('m')) return 'M';
+  
+  return 'U'; // Unknown if not specified
+}
+
+/**
+ * Formats a diagnosis code by removing decimal points and converting to uppercase
+ * @param code ICD-10 diagnosis code
+ * @returns Formatted diagnosis code
+ */
+function formatDiagnosisCode(code: string): string {
+  if (!code) return '';
+  return code.replace('.', '').toUpperCase();
+}
+
+/**
+ * Formats tax ID by removing any hyphens
+ * @param taxId Tax ID with possible hyphens
+ * @returns Clean tax ID without hyphens
+ */
+function formatTaxId(taxId: string | undefined): string {
+  if (!taxId) return '';
+  return taxId.replace(/-/g, '');
+}
+
+/**
+ * Converts a full state name to its two-letter postal abbreviation
+ * @param stateName Full state name
+ * @returns Two-letter state abbreviation
+ */
+function convertStateToAbbreviation(stateName: string | undefined): string {
+  if (!stateName) return '';
+  
+  const stateMap: {[key: string]: string} = {
+    'alabama': 'AL',
+    'alaska': 'AK',
+    'arizona': 'AZ',
+    'arkansas': 'AR',
+    'california': 'CA',
+    'colorado': 'CO',
+    'connecticut': 'CT',
+    'delaware': 'DE',
+    'florida': 'FL',
+    'georgia': 'GA',
+    'hawaii': 'HI',
+    'idaho': 'ID',
+    'illinois': 'IL',
+    'indiana': 'IN',
+    'iowa': 'IA',
+    'kansas': 'KS',
+    'kentucky': 'KY',
+    'louisiana': 'LA',
+    'maine': 'ME',
+    'maryland': 'MD',
+    'massachusetts': 'MA',
+    'michigan': 'MI',
+    'minnesota': 'MN',
+    'mississippi': 'MS',
+    'missouri': 'MO',
+    'montana': 'MT',
+    'nebraska': 'NE',
+    'nevada': 'NV',
+    'new hampshire': 'NH',
+    'new jersey': 'NJ',
+    'new mexico': 'NM',
+    'new york': 'NY',
+    'north carolina': 'NC',
+    'north dakota': 'ND',
+    'ohio': 'OH',
+    'oklahoma': 'OK',
+    'oregon': 'OR',
+    'pennsylvania': 'PA',
+    'rhode island': 'RI',
+    'south carolina': 'SC',
+    'south dakota': 'SD',
+    'tennessee': 'TN',
+    'texas': 'TX',
+    'utah': 'UT',
+    'vermont': 'VT',
+    'virginia': 'VA',
+    'washington': 'WA',
+    'west virginia': 'WV',
+    'wisconsin': 'WI',
+    'wyoming': 'WY',
+    'district of columbia': 'DC',
+    'american samoa': 'AS',
+    'guam': 'GU',
+    'northern mariana islands': 'MP',
+    'puerto rico': 'PR',
+    'united states minor outlying islands': 'UM',
+    'u.s. virgin islands': 'VI',
+  };
+  
+  // Check if input is already a valid two-letter state code
+  if (stateName.length === 2 && /^[A-Z]{2}$/.test(stateName.toUpperCase())) {
+    return stateName.toUpperCase();
+  }
+  
+  const normalizedState = stateName.trim().toLowerCase();
+  return stateMap[normalizedState] || '';
 }

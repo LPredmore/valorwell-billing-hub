@@ -94,7 +94,7 @@ Deno.serve(async (req: Request) => {
     
     // CRITICAL: Inspect and log specific fields we're focused on troubleshooting
     jsonClaims.forEach((claim, index) => {
-      console.log(`Claim #${index + 1} ID: ${claim.claim_id}`);
+      console.log(`Claim #${index + 1} ID: ${claim.remote_claimid}`);
       console.log(`  Patient: ${claim.pat_name_f} ${claim.pat_name_l}`);
       console.log(`  Patient DOB: ${claim.pat_dob}`);
       console.log(`  Gender: ${claim.pat_sex}`);
@@ -114,6 +114,13 @@ Deno.serve(async (req: Request) => {
       
       console.log(`  Provider City: ${claim.bill_city}`);
       console.log(`  Provider State: ${claim.bill_state || 'MISSING'}`);
+      
+      // Check specifically for payer_name
+      if ('payer_name' in claim) {
+        console.log(`  WARNING: payer_name field is still present with value: ${claim.payer_name}`);
+      } else {
+        console.log(`  VERIFIED: payer_name field has been successfully removed`);
+      }
     });
     
     // Log the final JSON string for verification
