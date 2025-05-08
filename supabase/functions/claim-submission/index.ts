@@ -53,6 +53,12 @@ Deno.serve(async (req: Request) => {
       try {
         const data = await fetchClaimData(appointmentId);
         
+        // CRITICAL: Log client's primary payer ID to verify it's being properly retrieved
+        console.log(`Appointment ${appointmentId} - Client ID: ${data.client.id} - Primary Payer ID from DB: ${data.client.client_primary_payer_id || 'NOT SET'}`);
+        
+        // Log client's state value to verify state handling
+        console.log(`Appointment ${appointmentId} - Client State from DB: ${data.client.client_state || 'NOT SET'}`);
+        
         // Validate required claim data
         if (!data.appointment.cpt_code) {
           throw new Error(`Appointment ${appointmentId} is missing CPT code`);
@@ -86,7 +92,7 @@ Deno.serve(async (req: Request) => {
     // Log the actual data being sent
     console.log(`Submitting ${jsonClaims.length} claims to Claim.MD`);
     
-    // Log some key details about each claim for debugging
+    // CRITICAL: Inspect and log specific fields we're focused on troubleshooting
     jsonClaims.forEach((claim, index) => {
       console.log(`Claim #${index + 1} ID: ${claim.claim_id}`);
       console.log(`  Patient: ${claim.pat_name_f} ${claim.pat_name_l}`);
@@ -98,11 +104,19 @@ Deno.serve(async (req: Request) => {
       console.log(`  Modifiers: ${[claim.charge[0].mod_1, claim.charge[0].mod_2, claim.charge[0].mod_3, claim.charge[0].mod_4].filter(Boolean).join(', ') || 'None'}`);
       console.log(`  Diagnosis: ${[claim.diag_1, claim.diag_2, claim.diag_3, claim.diag_4].filter(Boolean).join(', ') || 'None'}`);
       console.log(`  Amount: ${claim.charge[0].charge}`);
-      console.log(`  Tax ID: ${claim.bill_taxid}`);
+
+      // CRITICAL: Log the specific fields we need to debug
+      console.log(`  CRITICAL - Patient State: ${claim.pat_state || 'MISSING'}`);
+      console.log(`  CRITICAL - Insured State: ${claim.ins_state || 'MISSING'}`);
+      console.log(`  CRITICAL - Payer ID: ${claim.payer_id || 'MISSING'}`);
+      console.log(`  CRITICAL - Tax ID: ${claim.bill_taxid || 'MISSING'}`);
+      console.log(`  CRITICAL - Tax ID Type: ${claim.bill_taxid_type || 'MISSING'}`);
+      
       console.log(`  Provider City: ${claim.bill_city}`);
+      console.log(`  Provider State: ${claim.bill_state || 'MISSING'}`);
     });
     
-    // Also log the final JSON string for verification
+    // Log the final JSON string for verification
     console.log("Full claim batch JSON:", JSON.stringify(batchData, null, 2));
     
     // Submit claims to Claim.MD upload endpoint - ensure endpoint has trailing slash

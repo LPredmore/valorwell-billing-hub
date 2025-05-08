@@ -47,10 +47,20 @@ export default function ClaimBatch({ selectedAppointmentIds, onSuccess }: ClaimB
           success: false,
           error: error instanceof Error ? error.message : "An unknown error occurred",
           details: errorDetails,
+          rawResponse: error.response?.data || null, // Store the full response data for inspection
         });
         setShowResultDialog(true);
       },
     });
+  };
+
+  // Helper function to format JSON for display
+  const formatJSON = (json: any): string => {
+    try {
+      return JSON.stringify(json, null, 2);
+    } catch (e) {
+      return String(json);
+    }
   };
 
   return (
@@ -142,6 +152,21 @@ export default function ClaimBatch({ selectedAppointmentIds, onSuccess }: ClaimB
                               <li key={index}>
                                 {item.message || item.error || JSON.stringify(item)}
                                 {item.fields && <span className="text-slate-500"> (Field: {item.fields})</span>}
+                                
+                                {/* If there are nested messages, display them */}
+                                {item.messages && Array.isArray(item.messages) && item.messages.length > 0 && (
+                                  <ul className="list-circle pl-5 mt-1 space-y-1">
+                                    {item.messages.map((message: any, msgIndex: number) => (
+                                      <li key={`msg-${index}-${msgIndex}`} className="text-amber-700">
+                                        {message.message || JSON.stringify(message)}
+                                        {message.fields && 
+                                          <span className="text-amber-600"> (Field: {message.fields})</span>}
+                                        {message.mesgid && 
+                                          <span className="text-amber-600"> (Error Code: {message.mesgid})</span>}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
                               </li>
                             ))}
                           </ul>
@@ -150,6 +175,16 @@ export default function ClaimBatch({ selectedAppointmentIds, onSuccess }: ClaimB
                         )}
                       </div>
                     </div>
+                  )}
+                  
+                  {/* Technical Details Section (Collapsible) */}
+                  {submissionResult?.rawResponse && (
+                    <details className="mt-4 border rounded p-2">
+                      <summary className="cursor-pointer font-medium text-sm">Technical Details</summary>
+                      <pre className="text-xs bg-slate-50 p-2 mt-2 overflow-x-auto">
+                        {formatJSON(submissionResult.rawResponse)}
+                      </pre>
+                    </details>
                   )}
                 </>
               )}

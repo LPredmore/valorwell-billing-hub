@@ -102,7 +102,7 @@ interface ClaimMDPayload {
     payer_name: string;
     payer_id?: string;
     bill_taxid: string;
-    bill_taxid_type: string; // Required - EIN or SSN
+    bill_taxid_type: string; // Required - E or S
     bill_npi: string;
     bill_name: string;
     bill_taxonomy: string;
@@ -217,6 +217,83 @@ function formatTaxId(taxId: string | undefined): string {
 }
 
 /**
+ * Converts a full state name to its two-letter postal abbreviation
+ * @param stateName Full state name
+ * @returns Two-letter state abbreviation
+ */
+function convertStateToAbbreviation(stateName: string | undefined): string {
+  if (!stateName) return '';
+  
+  const stateMap: {[key: string]: string} = {
+    'alabama': 'AL',
+    'alaska': 'AK',
+    'arizona': 'AZ',
+    'arkansas': 'AR',
+    'california': 'CA',
+    'colorado': 'CO',
+    'connecticut': 'CT',
+    'delaware': 'DE',
+    'florida': 'FL',
+    'georgia': 'GA',
+    'hawaii': 'HI',
+    'idaho': 'ID',
+    'illinois': 'IL',
+    'indiana': 'IN',
+    'iowa': 'IA',
+    'kansas': 'KS',
+    'kentucky': 'KY',
+    'louisiana': 'LA',
+    'maine': 'ME',
+    'maryland': 'MD',
+    'massachusetts': 'MA',
+    'michigan': 'MI',
+    'minnesota': 'MN',
+    'mississippi': 'MS',
+    'missouri': 'MO',
+    'montana': 'MT',
+    'nebraska': 'NE',
+    'nevada': 'NV',
+    'new hampshire': 'NH',
+    'new jersey': 'NJ',
+    'new mexico': 'NM',
+    'new york': 'NY',
+    'north carolina': 'NC',
+    'north dakota': 'ND',
+    'ohio': 'OH',
+    'oklahoma': 'OK',
+    'oregon': 'OR',
+    'pennsylvania': 'PA',
+    'rhode island': 'RI',
+    'south carolina': 'SC',
+    'south dakota': 'SD',
+    'tennessee': 'TN',
+    'texas': 'TX',
+    'utah': 'UT',
+    'vermont': 'VT',
+    'virginia': 'VA',
+    'washington': 'WA',
+    'west virginia': 'WV',
+    'wisconsin': 'WI',
+    'wyoming': 'WY',
+    'district of columbia': 'DC',
+    'american samoa': 'AS',
+    'guam': 'GU',
+    'northern mariana islands': 'MP',
+    'puerto rico': 'PR',
+    'united states minor outlying islands': 'UM',
+    'u.s. virgin islands': 'VI',
+  };
+  
+  // Check if input is already a valid two-letter state code
+  if (stateName.length === 2 && /^[A-Z]{2}$/.test(stateName.toUpperCase())) {
+    return stateName.toUpperCase();
+  }
+  
+  const normalizedState = stateName.trim().toLowerCase();
+  return stateMap[normalizedState] || '';
+}
+
+/**
  * Fetches all data required for a claim from the appointment ID
  */
 export async function fetchClaimData(appointmentId: string) {
@@ -301,7 +378,7 @@ export function formatClaimJSON(data: {
   // Handle modifiers - ensure it's an array, not null
   const modifiers = appointment.modifiers || [];
   
-  // Correct typo in the practice city from "Sherdan" to "Sheridan"
+  // Make sure practice city is correctly spelled (fix any typo)
   const practiceCity = practice.practice_city === "Sherdan" ? "Sheridan" : practice.practice_city;
   
   // Split provider name into first and last name
@@ -329,8 +406,13 @@ export function formatClaimJSON(data: {
   // Default addresses if client address is not available
   const clientAddr1 = client.client_address1 || practice.practice_address1 || "123 Main St";
   const clientCity = client.client_city || practice.practice_city || "Anytown";
-  const clientState = client.client_state || practice.practice_state || "NY";
+  
+  // CRITICAL CHANGE: Ensure state is properly formatted as a two-letter code
+  const clientState = convertStateToAbbreviation(client.client_state || practice.practice_state || "WY");
   const clientZip = client.client_zip || practice.practice_zip || "10001";
+  
+  // CRITICAL CHANGE: Log the client's primary payer ID from the database
+  console.log(`CRITICAL - Client primary payer ID from database: ${client.client_primary_payer_id || 'NOT SET IN DATABASE'}`);
   
   // Create a single claim object with the exact structure Claim.MD expects
   const claimObject = {
@@ -344,7 +426,7 @@ export function formatClaimJSON(data: {
     pat_sex: formatGender(client.client_gender),
     pat_addr_1: clientAddr1,
     pat_city: clientCity,
-    pat_state: clientState,
+    pat_state: clientState, // Using two-letter abbreviation
     pat_zip: clientZip,
     
     // Subscriber/Insured information
@@ -356,23 +438,23 @@ export function formatClaimJSON(data: {
     ins_group: client.client_group_number_primary || undefined,
     ins_addr_1: clientAddr1,
     ins_city: clientCity,
-    ins_state: clientState,
+    ins_state: clientState, // Using two-letter abbreviation
     ins_zip: clientZip,
     
     // Payer information
     payer_name: client.client_insurance_company_primary || 'Unknown',
-    payer_id: client.client_primary_payer_id || '',
+    payer_id: client.client_primary_payer_id || '', // CRITICAL: Use the client's payer ID from the database
     
     // Billing provider information (using bill_ prefix)
     bill_taxid: formatTaxId(practice.practice_taxid),
-    bill_taxid_type: "EIN", // Default to Employer ID Number
+    bill_taxid_type: "E", // CRITICAL CHANGE: Always use "E" for Employer ID Number
     bill_npi: practice.practice_npi,
     bill_name: practice.practice_name,
     bill_taxonomy: practice.practice_taxonomy,
     bill_addr_1: practice.practice_address1,
     bill_addr_2: practice.practice_address2 || undefined,
     bill_city: practiceCity,
-    bill_state: practice.practice_state,
+    bill_state: convertStateToAbbreviation(practice.practice_state), // Convert to two-letter code
     bill_zip: practice.practice_zip,
     
     // Rendering provider information (using prov_ prefix)
