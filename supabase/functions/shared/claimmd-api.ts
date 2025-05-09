@@ -1,3 +1,4 @@
+
 // Shared utility for interacting with the Claim.MD API
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
@@ -104,6 +105,23 @@ function flattenObject(obj: any, prefix = ''): Record<string, string> {
   }, {});
 }
 
+// Determine if an endpoint should use URL-encoded form data
+// CRITICAL FIX: Added ERA-related endpoints to this list
+function requiresUrlEncodedData(endpointPath: string): boolean {
+  const lowerPath = endpointPath.toLowerCase();
+  return lowerPath.includes('elig') || 
+         lowerPath.includes('eligibility') || 
+         lowerPath === 'eralist' || 
+         lowerPath === 'eradata' || 
+         lowerPath === 'era835';
+}
+
+// Determine if an endpoint should use multipart form data
+function requiresMultipartFormData(endpointPath: string): boolean {
+  const lowerPath = endpointPath.toLowerCase();
+  return lowerPath === 'upload/' || lowerPath === 'upload';
+}
+
 // The main function to call Claim.MD API endpoints
 export async function callClaimMdApi(
   endpoint: string,
@@ -122,11 +140,11 @@ export async function callClaimMdApi(
     
     // Determine request format based on endpoint
     const endpointPath = endpoint.toLowerCase();
-    const requiresUrlEncodedData = endpointPath.includes('elig') || endpointPath.includes('eligibility');
-    const requiresMultipartFormData = endpointPath === 'upload/' || endpointPath === 'upload';
+    const isUrlEncodedData = requiresUrlEncodedData(endpointPath);
+    const isMultipartFormData = requiresMultipartFormData(endpointPath);
     
     // Log the request format determination
-    console.log(`Request format: ${requiresMultipartFormData ? 'multipart/form-data' : (requiresUrlEncodedData ? 'application/x-www-form-urlencoded' : 'application/json')}`);
+    console.log(`Request format: ${isMultipartFormData ? 'multipart/form-data' : (isUrlEncodedData ? 'application/x-www-form-urlencoded' : 'application/json')}`);
     
     // IMPORTANT: Claim.MD requires the AccountKey parameter with correct casing
     // Create a new object with AccountKey first, then add all other properties
@@ -141,8 +159,8 @@ export async function callClaimMdApi(
     let requestContentType: string;
     let serializedBody: string | FormData | URLSearchParams;
     
-    if (requiresUrlEncodedData) {
-      // For eligibility endpoints, use application/x-www-form-urlencoded
+    if (isUrlEncodedData) {
+      // For eligibility and ERA endpoints, use application/x-www-form-urlencoded
       requestContentType = 'application/x-www-form-urlencoded';
       
       // IMPORTANT: Create URLSearchParams with AccountKey as the first parameter
@@ -169,7 +187,7 @@ export async function callClaimMdApi(
       if (!rawRequestBody.startsWith('AccountKey=')) {
         console.warn('WARNING: AccountKey is NOT the first parameter in the request body!');
       }
-    } else if (requiresMultipartFormData) {
+    } else if (isMultipartFormData) {
       // For upload endpoint, use multipart/form-data
       // Do NOT manually set Content-Type - it will be automatically set with boundary
       requestContentType = 'multipart/form-data';
@@ -224,7 +242,7 @@ export async function callClaimMdApi(
         
         // Only set Content-Type for JSON and URL-encoded requests
         // For multipart/form-data, let the browser/runtime set it automatically with boundary
-        if (!requiresMultipartFormData) {
+        if (!isMultipartFormData) {
           headers['Content-Type'] = requestContentType;
         }
         
@@ -234,7 +252,7 @@ export async function callClaimMdApi(
         console.log(`URL: ${fullUrl}`);
         console.log(`Headers:`, JSON.stringify(headers));
         
-        if (!requiresMultipartFormData) {
+        if (!isMultipartFormData) {
           console.log(`Body: ${typeof serializedBody === 'string' ? serializedBody : serializedBody.toString()}`);
         } else {
           console.log(`Body: [FormData object with AccountKey and File parts]`);
@@ -345,9 +363,9 @@ export async function callClaimMdApi(
         // Log the API interaction
         await logApiInteraction(
           endpoint,
-          requiresMultipartFormData ? 
+          isMultipartFormData ? 
             { type: 'multipart/form-data', parts: ['AccountKey', 'File'] } : 
-            (requiresUrlEncodedData ? 
+            (isUrlEncodedData ? 
               (typeof serializedBody === 'string' ? serializedBody : serializedBody.toString()) : 
               requestWithApiKey),
           responseData,

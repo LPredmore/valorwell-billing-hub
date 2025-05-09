@@ -127,16 +127,33 @@ export function useEraRetrieval() {
     mutationFn: () => claimsService.retrieveEraFiles(),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['billableAppointments'] });
+      queryClient.invalidateQueries({ queryKey: ['eraList'] });
+      queryClient.invalidateQueries({ queryKey: ['unreconciledPayments'] });
       toast({
         title: "ERA files retrieved",
         description: `Processed ${data.processedCount} ERA files with ${data.paymentCount} payments`,
       });
     },
     onError: (error) => {
+      console.error("ERA retrieval error:", error);
+      let errorMessage = "Check console for details";
+      
+      // Try to extract the most useful error information
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        
+        // Look for Claim.MD specific error messages in the error
+        if (error.message.includes("AccountKey") && error.message.includes("required")) {
+          errorMessage = "API Authentication Error: AccountKey parameter required. Please check API key configuration.";
+        } else if (error.message.includes("Invalid") && error.message.includes("AccountKey")) {
+          errorMessage = "API Authentication Error: Invalid AccountKey. Please verify your API key.";
+        }
+      }
+      
       toast({
         variant: "destructive",
         title: "Failed to retrieve ERA files",
-        description: error instanceof Error ? error.message : "An unknown error occurred",
+        description: errorMessage,
       });
     }
   });

@@ -227,6 +227,7 @@ function extractEraIdsFromResponse(responseData: any): { eraId: string }[] {
 async function getEraDetail(eraId: string): Promise<any> {
   console.log(`Fetching details for ERA ID: ${eraId}`);
   
+  // Use eradata endpoint for getting ERA details - use URL-encoded form data format
   const result = await callClaimMdApi(
     'eradata', 
     {
@@ -282,7 +283,11 @@ Deno.serve(async (req: Request) => {
     console.log(`API Key exists: ${!!Deno.env.get('CLAIMMD_API_KEY')}`);
     
     // Step 1: First call the eralist endpoint to get available ERAs
-    // Use the documented format from the Claim.MD API v1.17 PDF
+    // CRITICAL FIX: Make sure we're using the correct parameters per Claim.MD API docs
+    // - endpoint name is 'eralist' (no trailing slash)
+    // - Parameters need to be URL-encoded (handled by callClaimMdApi)
+    // - FromDate and ToDate should use YYYY-MM-DD format
+    // - IncludeProcessed boolean should be set
     const eraListResult = await callClaimMdApi(
       'eralist',
       {
