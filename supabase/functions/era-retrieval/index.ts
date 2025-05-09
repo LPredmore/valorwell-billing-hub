@@ -1,3 +1,4 @@
+
 // Edge function to retrieve and process ERA files from Claim.MD
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
@@ -16,6 +17,15 @@ const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 // Settings key for storing the last ERA check date
 const LAST_ERA_CHECK_KEY = 'claim_md_last_era_check';
+
+// Format date from YYYY-MM-DD to MM-DD-YYYY as required by Claim.MD API
+function formatClaimMdDateString(dateString: string): string {
+  if (!dateString) return '';
+  // Split the ISO date format (YYYY-MM-DD)
+  const [year, month, day] = dateString.split('-');
+  // Return in MM-DD-YYYY format
+  return `${month}-${day}-${year}`;
+}
 
 // Get the last ERA check date from system settings
 async function getLastEraCheck(): Promise<string> {
@@ -196,6 +206,15 @@ function extractEraIdsFromResponse(responseData: any): { eraId: string }[] {
     return responseData.eras;
   }
   
+  // If we have a JSON response with era field
+  if (responseData && responseData.era && Array.isArray(responseData.era)) {
+    console.log(`Found ${responseData.era.length} ERAs in JSON response with 'era' key`);
+    // Map to expected format with eraId property
+    return responseData.era.map((item: any) => ({
+      eraId: item.eraid?.toString() || item.EraId?.toString() || ""
+    })).filter((item: any) => !!item.eraId);
+  }
+  
   // If we have a raw XML response
   if (responseData && responseData.raw && typeof responseData.raw === 'string' && 
       (responseData.contentType === 'xml' || responseData.format === 'xml' || responseData.raw.includes('<'))) {
@@ -276,6 +295,31 @@ async function logFullRequestDebugData(rawRequest: any, rawResponse: any): Promi
   }
 }
 
+// Make a simplified test request with minimal parameters
+async function makeSimplifiedTestRequest(): Promise<any> {
+  console.log("Making simplified test request with minimal parameters");
+  
+  const result = await callClaimMdApi(
+    'eralist',
+    {
+      NewOnly: "1"  // Only request unprocessed ERA files
+    },
+    null
+  );
+  
+  // Log the test request result
+  await logFullRequestDebugData(
+    { 
+      type: 'simplified_test', 
+      endpoint: 'eralist',
+      parameters: { NewOnly: "1" }
+    },
+    result
+  );
+  
+  return result;
+}
+
 // Handle all requests to this function
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight requests
@@ -299,17 +343,26 @@ Deno.serve(async (req: Request) => {
     const lastCheckDate = await getLastEraCheck();
     const today = new Date().toISOString().split('T')[0]; // Today in YYYY-MM-DD format
     
+    // Format dates for Claim.MD API (MM-DD-YYYY)
+    const formattedLastCheckDate = formatClaimMdDateString(lastCheckDate);
+    const formattedToday = formatClaimMdDateString(today);
+    
     console.log(`Starting ERA retrieval from ${lastCheckDate} to ${today}`);
+    console.log(`Formatted for Claim.MD: ${formattedLastCheckDate} to ${formattedToday}`);
     console.log(`API Key exists: ${!!Deno.env.get('CLAIMMD_API_KEY')}`);
     
-    // Step 1: Call the eralist endpoint with enhanced logging
+    // Optional: First try a minimal test request to validate API connectivity
+    const testResult = await makeSimplifiedTestRequest();
+    console.log("Test request result:", testResult.success ? "Success" : "Failed");
+    
+    // Step 1: Call the eralist endpoint with enhanced logging and correct parameters
     console.log("Making ERA list request with full logging enabled");
     const eraListResult = await callClaimMdApi(
       'eralist',  // Using corrected endpoint name
       {
-        FromDate: lastCheckDate,
-        ToDate: today,
-        IncludeProcessed: false // Only get unprocessed ERAs
+        ReceivedAfterDate: formattedLastCheckDate,  // MM-DD-YYYY format
+        ReceivedBeforeDate: formattedToday,         // MM-DD-YYYY format
+        NewOnly: "1"                                // Use "1" instead of boolean false
       },
       null
     );
@@ -317,11 +370,15 @@ Deno.serve(async (req: Request) => {
     // Extended debug logging for troubleshooting
     await logFullRequestDebugData(
       {
-        endpoint: 'era/list',
+        endpoint: 'eralist',
         parameters: {
-          FromDate: lastCheckDate,
-          ToDate: today,
-          IncludeProcessed: false
+          ReceivedAfterDate: formattedLastCheckDate,
+          ReceivedBeforeDate: formattedToday,
+          NewOnly: "1"
+        },
+        originalDates: {
+          lastCheckDate,
+          today
         },
         apiKeyPresent: !!Deno.env.get('CLAIMMD_API_KEY'),
         timestamp: new Date().toISOString()
@@ -338,10 +395,11 @@ Deno.serve(async (req: Request) => {
           details: eraListResult.error,
           responseData: eraListResult.data,
           requestInfo: {
-            fromDate: lastCheckDate,
-            toDate: today,
-            endpoint: 'era/list'
-          }
+            receivedAfterDate: formattedLastCheckDate,
+            receivedBeforeDate: formattedToday,
+            endpoint: 'eralist'
+          },
+          testResult: testResult.success ? "Test request succeeded" : "Test request failed" 
         }),
         { headers: { 'Content-Type': 'application/json', ...corsHeaders }, status: 500 }
       );

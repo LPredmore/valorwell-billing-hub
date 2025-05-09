@@ -137,29 +137,38 @@ export function useEraRetrieval() {
     },
     onError: (error) => {
       console.error("ERA retrieval error:", error);
-      let errorMessage = "Check console for details";
+      let errorMessage = "Check console and API logs for details";
       
       // Try to extract the most useful error information
       if (error instanceof Error) {
         errorMessage = error.message;
         
-        // Look for specific error codes in the JSON error response
+        // Look for specific error patterns in the response
         if (typeof error.message === 'string') {
-          if (error.message.includes('"error_code":20') || error.message.includes('AccountKey parameter required')) {
-            errorMessage = "API Authentication Error: AccountKey parameter required. Please check the request format and API key configuration.";
-          } else if (error.message.includes('"error_code":50') || error.message.includes('No service specified')) {
-            errorMessage = "API Error: No service specified. Please verify the endpoint URL format.";
-          } else if (error.message.includes('"error_code":30') || error.message.includes('Invalid') && error.message.includes('AccountKey')) {
-            errorMessage = "API Authentication Error: Invalid AccountKey. Please verify your API key.";
-          } else if (error.message.includes('Resource not found') || error.message.includes('404')) {
-            errorMessage = "API Error: Resource not found. Please verify the endpoint URL is correct.";
-          } else if (error.message.includes('era/list') || error.message.includes('era/data')) {
-            errorMessage = "ERA API Error: Issue with ERA endpoints. Check the logs for more details.";
+          // Handle date format errors
+          if (error.message.includes('date') && error.message.includes('format')) {
+            errorMessage = "Date format error: Please ensure dates are formatted correctly (MM-DD-YYYY)";
+          }
+          // Handle parameter name errors
+          else if (error.message.includes('parameter') || error.message.includes('Parameter')) {
+            errorMessage = "Parameter error: Please verify the correct parameter names are being used";
+          }
+          // Handle authentication errors
+          else if (error.message.includes('AccountKey') || error.message.includes('Authentication')) {
+            errorMessage = "Authentication error: Please verify your API key";
+          }
+          // Handle endpoint not found errors
+          else if (error.message.includes('not found') || error.message.includes('404')) {
+            errorMessage = "Endpoint error: Please verify the API endpoint URL";
+          }
+          // Handle service errors
+          else if (error.message.includes('service') || error.message.includes('Service')) {
+            errorMessage = "Service error: The requested service may not be available";
           }
         }
         
         // Add information about request inspection logs
-        errorMessage += " - Complete request details have been logged to the database for inspection.";
+        errorMessage += " - Check API logs for detailed request information";
       }
       
       // Invalidate API logs to ensure fresh data after an error
