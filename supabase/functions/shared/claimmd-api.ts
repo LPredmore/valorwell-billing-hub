@@ -4,7 +4,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
 // Updated API base URL per documentation v1.17
-const CLAIMMD_BASE_URL = 'https://svc.claim.md/services';
+const CLAIMMD_BASE_URL = 'https://api.claim.md/services';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') as string;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string;
 
@@ -105,15 +105,43 @@ function flattenObject(obj: any, prefix = ''): Record<string, string> {
   }, {});
 }
 
+// Map endpoint aliases to their full API paths
+const endpointMap: Record<string, string> = {
+  'eralist': 'era/list/',
+  'era/list': 'era/list/',
+  'eradata': 'era/data/',
+  'era/data': 'era/data/',
+  'era835': 'era/835/',
+  'era/835': 'era/835/',
+  // Add other endpoints as needed
+};
+
+// Resolve the endpoint to the correct full path
+function resolveEndpoint(endpoint: string): string {
+  // Check if we have a mapping for this endpoint
+  if (endpointMap[endpoint.toLowerCase()]) {
+    return endpointMap[endpoint.toLowerCase()];
+  }
+  
+  // If no mapping exists, return the original endpoint
+  // but ensure it ends with a trailing slash as required by the API
+  return endpoint.endsWith('/') ? endpoint : `${endpoint}/`;
+}
+
 // Determine if an endpoint should use URL-encoded form data
-// CRITICAL FIX: Added ERA-related endpoints to this list
 function requiresUrlEncodedData(endpointPath: string): boolean {
   const lowerPath = endpointPath.toLowerCase();
   return lowerPath.includes('elig') || 
          lowerPath.includes('eligibility') || 
          lowerPath === 'eralist' || 
+         lowerPath === 'era/list' ||
+         lowerPath === 'era/list/' || 
          lowerPath === 'eradata' || 
-         lowerPath === 'era835';
+         lowerPath === 'era/data' ||
+         lowerPath === 'era/data/' || 
+         lowerPath === 'era835' ||
+         lowerPath === 'era/835' ||
+         lowerPath === 'era/835/';
 }
 
 // Determine if an endpoint should use multipart form data
@@ -186,9 +214,12 @@ export async function callClaimMdApi(
   const startTime = performance.now();
   
   try {
+    // Resolve the correct endpoint path based on the API documentation
+    const resolvedEndpoint = resolveEndpoint(endpoint);
+    
     // Enhanced logging to see exactly which endpoint is being called
-    const fullUrl = `${CLAIMMD_BASE_URL}/${endpoint}`;
-    console.log(`Calling Claim.MD API: ${endpoint}`);
+    const fullUrl = `${CLAIMMD_BASE_URL}/${resolvedEndpoint}`;
+    console.log(`Calling Claim.MD API: ${endpoint} (resolved to: ${resolvedEndpoint})`);
     console.log(`Full API URL: ${fullUrl}`);
     
     // Determine request format based on endpoint
@@ -301,7 +332,8 @@ export async function callClaimMdApi(
         
         // Log complete HTTP request details for inspection
         // This is especially useful for debugging ERA retrieval issues
-        if (endpoint.toLowerCase() === 'eralist' || endpoint.toLowerCase() === 'eradata') {
+        if (endpoint.toLowerCase() === 'eralist' || endpoint.toLowerCase() === 'era/list' ||
+            endpoint.toLowerCase() === 'eradata' || endpoint.toLowerCase() === 'era/data') {
           await logCompleteHttpRequest(fullUrl, 'POST', headers, serializedBody);
         }
         
@@ -317,9 +349,6 @@ export async function callClaimMdApi(
           console.log(`Body: [FormData object with AccountKey and File parts]`);
         }
         console.log('=== END REQUEST DETAILS ===');
-        
-        // TEMPORARY: Add a console.log to show the current ApiKey
-        console.log(`Using API Key: ${apiKey}`);
 
         const response = await fetch(fullUrl, {
           method: 'POST',

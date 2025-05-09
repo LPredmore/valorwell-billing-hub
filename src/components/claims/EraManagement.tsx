@@ -54,20 +54,39 @@ export default function EraManagement() {
     return new Date(dateString).toLocaleDateString();
   };
 
+  // Enhanced error handling for retrieveEra
   const handleRetrieveEra = () => {
     retrieveEra(undefined, {
       onSuccess: (data) => {
         toast({
           title: "ERA Files Retrieved",
-          description: data.message || `Successfully processed ERA files`,
+          description: `Successfully processed ${data.processedCount || 0} ERA files with ${data.paymentCount || 0} payments`,
           variant: "default",
         });
       },
       onError: (error) => {
         console.error("ERA retrieval error:", error);
+        let errorMessage = "An error occurred";
+        
+        if (error instanceof Error) {
+          // Extract more meaningful error messages
+          errorMessage = error.message;
+          
+          // Look for specific API error patterns
+          if (error.message.includes("AccountKey")) {
+            errorMessage = "API Authentication Error: Verify your API key configuration.";
+          } else if (error.message.includes("endpoint") || error.message.includes("format")) {
+            errorMessage = "API Endpoint Error: The ERA endpoint format may be incorrect.";
+          } else if (error.message.includes("No new ERA files")) {
+            errorMessage = "No new ERA files available for processing.";
+          } else if (error.message.includes("404") || error.message.includes("not found")) {
+            errorMessage = "API Error: The requested ERA endpoint could not be found.";
+          }
+        }
+        
         toast({
           title: "Failed to retrieve ERA files",
-          description: error instanceof Error ? error.message : String(error),
+          description: errorMessage,
           variant: "destructive",
         });
       }
@@ -150,9 +169,16 @@ export default function EraManagement() {
       {retrieveError && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
+          <AlertTitle>Error Processing ERA Files</AlertTitle>
           <AlertDescription>
-            Failed to retrieve ERA files: {retrieveError instanceof Error ? retrieveError.message : String(retrieveError)}
+            {retrieveError instanceof Error 
+              ? (retrieveError.message.includes('AccountKey')
+                  ? "Authentication Error: Verify the API key configuration and request format."
+                  : (retrieveError.message.includes('endpoint')
+                      ? "Endpoint Error: The ERA API endpoint format may be incorrect."
+                      : retrieveError.message))
+              : String(retrieveError)}
+            <p className="mt-2 text-sm">Please check the server logs for more details.</p>
           </AlertDescription>
         </Alert>
       )}

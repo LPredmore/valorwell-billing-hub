@@ -150,6 +150,10 @@ export function useEraRetrieval() {
             errorMessage = "API Error: No service specified. Please verify the endpoint URL format.";
           } else if (error.message.includes('"error_code":30') || error.message.includes('Invalid') && error.message.includes('AccountKey')) {
             errorMessage = "API Authentication Error: Invalid AccountKey. Please verify your API key.";
+          } else if (error.message.includes('Resource not found') || error.message.includes('404')) {
+            errorMessage = "API Error: Resource not found. Please verify the endpoint URL is correct.";
+          } else if (error.message.includes('era/list') || error.message.includes('era/data')) {
+            errorMessage = "ERA API Error: Issue with ERA endpoints. Check the logs for more details.";
           }
         }
         
