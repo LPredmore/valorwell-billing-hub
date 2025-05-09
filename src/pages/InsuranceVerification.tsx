@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,11 +43,31 @@ import {
 } from "@/components/ui/tooltip";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 
+// Interface for client data
+interface Client {
+  id: string;
+  client_first_name: string | null;
+  client_last_name: string | null;
+  client_insurance_company_primary: string | null;
+  client_policy_number_primary: string | null;
+  eligibility_last_checked_primary: string | null;
+  eligibility_status_primary: string | null;
+  eligibility_response_details_primary_json: any; // Using any for now, will handle type safety in code
+  eligibility_copay_primary: number | null;
+  eligibility_deductible_primary: number | null;
+  eligibility_coinsurance_primary_percent: number | null;
+}
+
 // Type definition for error objects to help TypeScript
 interface ErrorObject {
   error_mesg?: string;
   error_code?: string;
   [key: string]: any;
+}
+
+// Helper function to check if an object is a record and has a specific property
+function isObjectWithProperty<T extends object>(obj: any, prop: string): obj is T {
+  return obj && typeof obj === 'object' && !Array.isArray(obj) && prop in obj;
 }
 
 const InsuranceVerification = () => {
@@ -68,7 +87,7 @@ const InsuranceVerification = () => {
         .order('client_last_name', { ascending: true });
         
       if (error) throw error;
-      return data;
+      return data as Client[];
     }
   });
   
@@ -161,25 +180,33 @@ const InsuranceVerification = () => {
   const getErrorCode = (responseData: any): string | null => {
     if (!responseData) return null;
     
-    // Check if error is an array of error objects
-    if (responseData.elig?.error && Array.isArray(responseData.elig.error)) {
-      const firstError = responseData.elig.error[0];
-      return firstError?.error_code || null;
-    }
-    
-    // Check if error is a direct object with error_code
-    if (responseData.error?.error_code) {
-      return responseData.error.error_code;
-    }
-    
-    // Check if error is inside originalErrorData
-    if (responseData.originalErrorData?.error_code) {
-      return responseData.originalErrorData.error_code;
-    }
-    
-    // Check if error is inside elig
-    if (responseData.elig?.originalErrorData?.error_code) {
-      return responseData.elig.originalErrorData.error_code;
+    // Check if responseData is an object
+    if (typeof responseData === 'object' && responseData !== null) {
+      // Check if error is an array of error objects in elig
+      if (isObjectWithProperty<{elig: any}>(responseData, 'elig') && 
+          isObjectWithProperty<{error: any}>(responseData.elig, 'error') && 
+          Array.isArray(responseData.elig.error) && 
+          responseData.elig.error.length > 0) {
+        return responseData.elig.error[0]?.error_code || null;
+      }
+      
+      // Check if error is a direct object with error_code
+      if (isObjectWithProperty<{error: any}>(responseData, 'error')) {
+        if (typeof responseData.error === 'object' && responseData.error?.error_code) {
+          return responseData.error.error_code;
+        }
+      }
+      
+      // Check if originalErrorData contains the error code
+      if (isObjectWithProperty<{originalErrorData: any}>(responseData, 'originalErrorData')) {
+        return responseData.originalErrorData?.error_code || null;
+      }
+      
+      // Check if elig contains originalErrorData
+      if (isObjectWithProperty<{elig: any}>(responseData, 'elig') && 
+          isObjectWithProperty<{originalErrorData: any}>(responseData.elig, 'originalErrorData')) {
+        return responseData.elig.originalErrorData?.error_code || null;
+      }
     }
     
     return null;
@@ -338,20 +365,26 @@ const InsuranceVerification = () => {
       const client = clients?.find(c => c.eligibility_status_primary?.toLowerCase() === 'error');
       if (client) {
         // Safely navigate potential error structures
-        const errorData = client?.eligibility_response_details_primary_json;
+        const errorData = client.eligibility_response_details_primary_json;
         let errorCode = null;
         
         if (typeof errorData === 'object' && errorData !== null) {
           // Check if error is an array of error objects in elig
-          if (errorData.elig?.error && Array.isArray(errorData.elig.error)) {
+          if (isObjectWithProperty<{elig: any}>(errorData, 'elig') && 
+              isObjectWithProperty<{error: any}>(errorData.elig, 'error') && 
+              Array.isArray(errorData.elig.error) &&
+              errorData.elig.error.length > 0) {
             errorCode = errorData.elig.error[0]?.error_code;
           }
           // Check if error is a direct object with error_code
-          else if (errorData.error?.error_code) {
+          else if (isObjectWithProperty<{error: any}>(errorData, 'error') &&
+                   typeof errorData.error === 'object' &&
+                   errorData.error?.error_code) {
             errorCode = errorData.error.error_code;
           }
           // Check originalErrorData
-          else if (errorData.originalErrorData?.error_code) {
+          else if (isObjectWithProperty<{originalErrorData: any}>(errorData, 'originalErrorData') &&
+                   errorData.originalErrorData?.error_code) {
             errorCode = errorData.originalErrorData.error_code;
           }
         }
@@ -367,12 +400,12 @@ const InsuranceVerification = () => {
   };
 
   // Check if client has all required insurance info for eligibility check
-  const hasRequiredInformation = (client: any) => {
+  const hasRequiredInformation = (client: Client) => {
     return client.client_insurance_company_primary && client.client_policy_number_primary;
   };
 
   // Get warning message if client is missing required insurance info
-  const getMissingInfoWarning = (client: any) => {
+  const getMissingInfoWarning = (client: Client) => {
     if (!client.client_insurance_company_primary) {
       return "Missing insurance company";
     }
@@ -383,23 +416,27 @@ const InsuranceVerification = () => {
   };
 
   // Safely extract error details from the response data
-  const getErrorDetails = (client: any): ErrorObject | null => {
+  const getErrorDetails = (client: Client): ErrorObject | null => {
     if (!client?.eligibility_response_details_primary_json) return null;
     
     const responseData = client.eligibility_response_details_primary_json;
     
     if (typeof responseData === 'object' && responseData !== null) {
       // Check array of errors in elig
-      if (responseData.elig?.error && Array.isArray(responseData.elig.error) && responseData.elig.error.length > 0) {
-        return responseData.elig.error[0];
+      if (isObjectWithProperty<{elig: any}>(responseData, 'elig') && 
+          isObjectWithProperty<{error: any}>(responseData.elig, 'error') && 
+          Array.isArray(responseData.elig.error) && 
+          responseData.elig.error.length > 0) {
+        return responseData.elig.error[0] as ErrorObject;
       }
       // Check direct error object
-      if (responseData.error && typeof responseData.error === 'object') {
-        return responseData.error;
+      if (isObjectWithProperty<{error: any}>(responseData, 'error') && 
+          typeof responseData.error === 'object') {
+        return responseData.error as ErrorObject;
       }
       // Check originalErrorData
-      if (responseData.originalErrorData) {
-        return responseData.originalErrorData;
+      if (isObjectWithProperty<{originalErrorData: any}>(responseData, 'originalErrorData')) {
+        return responseData.originalErrorData as ErrorObject;
       }
     }
     
@@ -407,8 +444,8 @@ const InsuranceVerification = () => {
   };
 
   // Get formatted request data that was used in the last check
-  const getLastRequestData = (client: any) => {
-    if (client?.eligibility_response_details_primary_json?.request_payload) {
+  const getLastRequestData = (client: Client) => {
+    if (isObjectWithProperty<{request_payload: any}>(client?.eligibility_response_details_primary_json, 'request_payload')) {
       const payload = client.eligibility_response_details_primary_json.request_payload;
       return {
         policyNumber: payload.ins_id,
@@ -434,7 +471,7 @@ const InsuranceVerification = () => {
   };
 
   // Get detailed error reason when possible
-  const getDetailedErrorReason = (client: any) => {
+  const getDetailedErrorReason = (client: Client) => {
     // Get error details using our helper function 
     const errorDetails = getErrorDetails(client);
     const errorCode = errorDetails?.error_code;
@@ -470,11 +507,12 @@ const InsuranceVerification = () => {
   };
 
   // Get coverage period if available
-  const getCoveragePeriod = (client: any) => {
+  const getCoveragePeriod = (client: Client) => {
     // First check if we have plan_date in the eligibility response
-    if (client?.eligibility_response_details_primary_json?.elig?.plan_date) {
+    if (isObjectWithProperty<{elig: any}>(client?.eligibility_response_details_primary_json, 'elig') && 
+        client.eligibility_response_details_primary_json.elig.plan_date) {
       const planDate = client.eligibility_response_details_primary_json.elig.plan_date;
-      if (planDate.includes('-')) {
+      if (typeof planDate === 'string' && planDate.includes('-')) {
         const [start, end] = planDate.split('-');
         return {
           startDate: formatApiDate(start),
@@ -489,7 +527,8 @@ const InsuranceVerification = () => {
     }
     
     // Otherwise check in the benefits array
-    if (client?.eligibility_response_details_primary_json?.elig?.benefit) {
+    if (isObjectWithProperty<{elig: any}>(client?.eligibility_response_details_primary_json, 'elig') && 
+        Array.isArray(client.eligibility_response_details_primary_json.elig.benefit)) {
       const benefits = client.eligibility_response_details_primary_json.elig.benefit;
       
       // Look for plan date entries
@@ -524,9 +563,10 @@ const InsuranceVerification = () => {
   };
 
   // Get demographic info returned in the eligibility response
-  const getDemographicInfo = (client: any) => {
-    const elig = client?.eligibility_response_details_primary_json?.elig;
-    if (!elig) return null;
+  const getDemographicInfo = (client: Client) => {
+    if (!isObjectWithProperty<{elig: any}>(client?.eligibility_response_details_primary_json, 'elig')) return null;
+    
+    const elig = client.eligibility_response_details_primary_json.elig;
     
     return {
       firstName: elig.ins_name_f,
@@ -538,19 +578,19 @@ const InsuranceVerification = () => {
   };
 
   // Get plan name from response data
-  const getPlanName = (client: any) => {
-    if (client?.eligibility_response_details_primary_json?.elig) {
-      return client.eligibility_response_details_primary_json.elig.plan_name || 
-             client.eligibility_response_details_primary_json.elig.plan_description || 
-             client.eligibility_response_details_primary_json.elig.plan_number;
+  const getPlanName = (client: Client) => {
+    if (isObjectWithProperty<{elig: any}>(client?.eligibility_response_details_primary_json, 'elig')) {
+      const elig = client.eligibility_response_details_primary_json.elig;
+      return elig.plan_name || elig.plan_description || elig.plan_number;
     }
     
     return null;
   };
 
   // Get network status (in/out of network)
-  const getNetworkStatus = (client: any) => {
-    if (client?.eligibility_response_details_primary_json?.elig?.benefit) {
+  const getNetworkStatus = (client: Client) => {
+    if (isObjectWithProperty<{elig: any}>(client?.eligibility_response_details_primary_json, 'elig') && 
+        Array.isArray(client.eligibility_response_details_primary_json.elig.benefit)) {
       const benefits = client.eligibility_response_details_primary_json.elig.benefit;
       
       // Check for in-network specifically for service code 98 (Mental Health)
@@ -568,10 +608,11 @@ const InsuranceVerification = () => {
   };
 
   // Get additional benefit details
-  const getAdditionalBenefits = (client: any) => {
+  const getAdditionalBenefits = (client: Client) => {
     const benefits = [];
     
-    if (client?.eligibility_response_details_primary_json?.elig?.benefit) {
+    if (isObjectWithProperty<{elig: any}>(client?.eligibility_response_details_primary_json, 'elig') && 
+        Array.isArray(client.eligibility_response_details_primary_json.elig.benefit)) {
       const rawBenefits = client.eligibility_response_details_primary_json.elig.benefit;
       
       // Look for specific mental health benefits
@@ -603,8 +644,9 @@ const InsuranceVerification = () => {
   };
 
   // Get remaining deductible information if available
-  const getDeductibleInfo = (client: any) => {
-    if (!client?.eligibility_response_details_primary_json?.elig?.benefit) {
+  const getDeductibleInfo = (client: Client) => {
+    if (!isObjectWithProperty<{elig: any}>(client?.eligibility_response_details_primary_json, 'elig') || 
+        !Array.isArray(client.eligibility_response_details_primary_json.elig.benefit)) {
       return null;
     }
     
@@ -629,7 +671,7 @@ const InsuranceVerification = () => {
   };
   
   // Get response type for a client
-  const getClientResponseType = (client: any) => {
+  const getClientResponseType = (client: Client) => {
     if (!client?.eligibility_response_details_primary_json) return 'unknown';
     
     const responseData = client.eligibility_response_details_primary_json;
@@ -638,15 +680,20 @@ const InsuranceVerification = () => {
     // Check for error code in various possible locations
     if (typeof responseData === 'object' && responseData !== null) {
       // Check if error is in elig.error array
-      if (responseData.elig?.error && Array.isArray(responseData.elig.error)) {
+      if (isObjectWithProperty<{elig: any}>(responseData, 'elig') && 
+          isObjectWithProperty<{error: any}>(responseData.elig, 'error') && 
+          Array.isArray(responseData.elig.error)) {
         errorCode = responseData.elig.error[0]?.error_code;
       }
       // Check if error is a direct property 
-      else if (responseData.error?.error_code) {
+      else if (isObjectWithProperty<{error: any}>(responseData, 'error') && 
+               typeof responseData.error === 'object' && 
+               responseData.error?.error_code) {
         errorCode = responseData.error.error_code;
       }
       // Check originalErrorData
-      else if (responseData.originalErrorData?.error_code) {
+      else if (isObjectWithProperty<{originalErrorData: any}>(responseData, 'originalErrorData') && 
+               responseData.originalErrorData?.error_code) {
         errorCode = responseData.originalErrorData.error_code;
       }
     }
@@ -666,7 +713,7 @@ const InsuranceVerification = () => {
   };
 
   // Get verification information for display
-  const getVerificationInfo = (client: any) => {
+  const getVerificationInfo = (client: Client) => {
     const responseType = getClientResponseType(client);
     const demoInfo = getDemographicInfo(client);
     

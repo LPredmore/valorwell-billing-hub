@@ -1,10 +1,31 @@
-
 // Utility functions for formatting data according to Claim.MD's API requirements
 
 /**
  * This module provides utilities for formatting data to meet Claim.MD API's 
  * specific format requirements, such as date formatting and code mapping.
  */
+
+// Define interfaces for type safety
+interface ClaimMdResponse {
+  elig?: {
+    error?: Array<{error_code?: string; error_mesg?: string}>;
+    benefit?: Array<any>;
+    plan_date?: string;
+    plan_name?: string;
+    plan_description?: string;
+    plan_number?: string;
+    ins_name_f?: string;
+    ins_name_l?: string;
+    ins_dob?: string;
+    ins_sex?: string;
+    ins_number?: string;
+    ins_id?: string;
+    [key: string]: any;
+  };
+  error?: string | {error_code?: string; error_mesg?: string; [key: string]: any};
+  originalErrorData?: {error_code?: string; error_mesg?: string; [key: string]: any};
+  [key: string]: any;
+}
 
 // Format dates from YYYY-MM-DD to yyyymmdd (no hyphens)
 export function formatClaimMdDate(dateString: string | null): string | null {
@@ -118,20 +139,36 @@ export function formatEligibilityPayload(
 export function getErrorCode(responseData: any): string | null {
   if (!responseData) return null;
   
+  if (typeof responseData !== 'object') return null;
+  
+  // Helper function to safely check properties
+  const hasProperty = (obj: any, prop: string) => 
+    obj && typeof obj === 'object' && !Array.isArray(obj) && prop in obj;
+  
   // Check if error is an array of error objects in elig property
-  if (responseData.elig?.error && Array.isArray(responseData.elig.error)) {
+  if (hasProperty(responseData, 'elig') && 
+      hasProperty(responseData.elig, 'error') && 
+      Array.isArray(responseData.elig.error) && 
+      responseData.elig.error.length > 0) {
     const firstError = responseData.elig.error[0];
     return firstError?.error_code || null;
   }
   
   // Check if error is a direct object with error_code
-  if (responseData.error && typeof responseData.error === 'object' && responseData.error.error_code) {
-    return responseData.error.error_code;
+  if (hasProperty(responseData, 'error')) {
+    // Handle both string and object error formats
+    if (typeof responseData.error === 'object') {
+      return responseData.error?.error_code || null;
+    }
+    // If error is a string, check originalErrorData for the code
+    else if (hasProperty(responseData, 'originalErrorData')) {
+      return responseData.originalErrorData?.error_code || null;
+    }
   }
   
   // Check if originalErrorData contains the error code
-  if (responseData.originalErrorData?.error_code) {
-    return responseData.originalErrorData.error_code;
+  if (hasProperty(responseData, 'originalErrorData')) {
+    return responseData.originalErrorData?.error_code || null;
   }
   
   return null;
@@ -187,10 +224,15 @@ export function determineEligibilityStatus(responseData: any): {
     return { status: 'Error', copay, deductible, coinsurancePercent };
   }
   
-  // Extract benefit information from the response
-  const benefits = responseData?.elig?.benefit || [];
+  // Helper function to safely check properties
+  const hasProperty = (obj: any, prop: string) => 
+    obj && typeof obj === 'object' && !Array.isArray(obj) && prop in obj;
   
-  if (Array.isArray(benefits) && benefits.length > 0) {
+  // Extract benefit information from the response
+  const benefits = hasProperty(responseData, 'elig') && Array.isArray(responseData.elig.benefit) ? 
+    responseData.elig.benefit : [];
+  
+  if (benefits.length > 0) {
     // Check for active coverage indicators in the benefits array
     const hasActiveCoverage = benefits.some(benefit => {
       const coverageDesc = (benefit.benefit_coverage_description || '').toLowerCase();
@@ -244,7 +286,7 @@ export function determineEligibilityStatus(responseData: any): {
       // If benefits exist but no active coverage, it's likely inactive
       status = 'Inactive';
     }
-  } else if (responseData?.elig) {
+  } else if (hasProperty(responseData, 'elig')) {
     // If elig exists but no benefits, likely inactive or status unknown
     status = 'Inactive';
   }
