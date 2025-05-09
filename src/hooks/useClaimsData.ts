@@ -163,7 +163,7 @@ export function useEraRetrieval() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: () => claimsService.retrieveEraFiles(),
+    mutationFn: (dateRange?: { fromDate: string; toDate: string }) => claimsService.retrieveEraFiles(dateRange),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['billableAppointments'] });
       queryClient.invalidateQueries({ queryKey: ['eraList'] });

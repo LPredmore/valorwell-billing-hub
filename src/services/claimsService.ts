@@ -156,10 +156,10 @@ export const claimsService = {
   /**
    * Retrieves ERA files from Claim.MD
    */
-  async retrieveEraFiles() {
+  async retrieveEraFiles(dateRange?: { fromDate: string; toDate: string }) {
     try {
       const { data, error } = await supabase.functions.invoke('era-retrieval', {
-        body: {},
+        body: dateRange || {},
       });
 
       if (error) {

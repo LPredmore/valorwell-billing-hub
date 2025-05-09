@@ -696,8 +696,8 @@ Deno.serve(async (req: Request) => {
       );
     }
     
-    // Parse request body to check if this is a test mode request
-    let requestBody = {};
+    // Parse request body to check if this is a test mode request or contains date range
+    let requestBody: any = {};
     try {
       requestBody = await req.json();
     } catch (e) {
@@ -729,17 +729,28 @@ Deno.serve(async (req: Request) => {
       }
     }
     
-    // Standard ERA retrieval functionality - rest of the original function
-    // Get the last ERA check date
-    const lastCheckDate = await getLastEraCheck();
-    const today = new Date().toISOString().split('T')[0]; // Today in YYYY-MM-DD format
+    // Process the date range from the request or use fallback dates
+    let fromDate: string;
+    let toDate: string;
+    
+    if (requestBody && requestBody.fromDate) {
+      // Use provided date range
+      fromDate = requestBody.fromDate;
+      toDate = requestBody.toDate || fromDate; // If toDate is not provided, use fromDate as single day range
+      console.log(`Using provided date range: ${fromDate} to ${toDate}`);
+    } else {
+      // Fall back to last check date and today
+      fromDate = await getLastEraCheck();
+      toDate = new Date().toISOString().split('T')[0]; // Today in YYYY-MM-DD format
+      console.log(`Using default date range: ${fromDate} to ${toDate}`);
+    }
     
     // Format dates for Claim.MD API (MM-DD-YYYY)
-    const formattedLastCheckDate = formatClaimMdDateString(lastCheckDate);
-    const formattedToday = formatClaimMdDateString(today);
+    const formattedFromDate = formatClaimMdDateString(fromDate);
+    const formattedToDate = formatClaimMdDateString(toDate);
     
-    console.log(`Starting ERA retrieval from ${lastCheckDate} to ${today}`);
-    console.log(`Formatted for Claim.MD: ${formattedLastCheckDate} to ${formattedToday}`);
+    console.log(`Starting ERA retrieval from ${fromDate} to ${toDate}`);
+    console.log(`Formatted for Claim.MD: ${formattedFromDate} to ${formattedToDate}`);
     console.log(`API Key exists: ${!!Deno.env.get('CLAIMMD_API_KEY')}`);
     
     // Optional: First try a minimal test request to validate API connectivity
@@ -751,9 +762,9 @@ Deno.serve(async (req: Request) => {
     const eraListResult = await callClaimMdApi(
       'eralist',  // Using corrected endpoint name
       {
-        ReceivedAfterDate: formattedLastCheckDate,  // MM-DD-YYYY format
-        ReceivedBeforeDate: formattedToday,         // MM-DD-YYYY format
-        NewOnly: "1"                                // Use "1" instead of boolean false
+        ReceivedAfterDate: formattedFromDate,  // MM-DD-YYYY format
+        ReceivedBeforeDate: formattedToDate,   // MM-DD-YYYY format
+        NewOnly: "1"                           // Use "1" instead of boolean false
       },
       null
     );
@@ -763,13 +774,13 @@ Deno.serve(async (req: Request) => {
       {
         endpoint: 'eralist',
         parameters: {
-          ReceivedAfterDate: formattedLastCheckDate,
-          ReceivedBeforeDate: formattedToday,
+          ReceivedAfterDate: formattedFromDate,
+          ReceivedBeforeDate: formattedToDate,
           NewOnly: "1"
         },
         originalDates: {
-          lastCheckDate,
-          today
+          fromDate,
+          toDate
         },
         apiKeyPresent: !!Deno.env.get('CLAIMMD_API_KEY'),
         timestamp: new Date().toISOString()
@@ -786,8 +797,8 @@ Deno.serve(async (req: Request) => {
           details: eraListResult.error,
           responseData: eraListResult.data,
           requestInfo: {
-            receivedAfterDate: formattedLastCheckDate,
-            receivedBeforeDate: formattedToday,
+            receivedAfterDate: formattedFromDate,
+            receivedBeforeDate: formattedToDate,
             endpoint: 'eralist'
           },
           testResult: testResult.success ? "Test request succeeded" : "Test request failed" 
@@ -802,13 +813,22 @@ Deno.serve(async (req: Request) => {
     if (!eraIds || eraIds.length === 0) {
       // No new ERAs to process
       console.log("No new ERA files to process");
-      await updateLastEraCheck(); // Still update the last check date
+      
+      // Only update the last check date if we were using the default date range
+      if (!requestBody || !requestBody.fromDate) {
+        await updateLastEraCheck(); // Still update the last check date for default mode
+      }
+      
       return new Response(
         JSON.stringify({
           success: true,
           processedCount: 0,
           paymentCount: 0,
-          message: "No new ERA files to process"
+          message: "No new ERA files to process",
+          dateRange: {
+            from: fromDate,
+            to: toDate
+          }
         }),
         { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
@@ -848,8 +868,10 @@ Deno.serve(async (req: Request) => {
       }
     }
     
-    // Update the last ERA check date
-    await updateLastEraCheck();
+    // Only update the last check date if we were using the default date range
+    if (!requestBody || !requestBody.fromDate) {
+      await updateLastEraCheck();
+    }
     
     console.log(`ERA processing completed: ${totalProcessed} records, ${totalPayments} payments`);
     
@@ -859,6 +881,10 @@ Deno.serve(async (req: Request) => {
         processedCount: totalProcessed,
         paymentCount: totalPayments,
         processedEras: processedEras,
+        dateRange: {
+          from: fromDate,
+          to: toDate
+        },
         message: `Successfully processed ${totalProcessed} ERA records with ${totalPayments} payments`
       }),
       { headers: { 'Content-Type': 'application/json', ...corsHeaders } }

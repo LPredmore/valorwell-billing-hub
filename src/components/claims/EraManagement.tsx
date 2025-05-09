@@ -14,23 +14,38 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   useEraList, 
   useUnreconciledPayments,
-  useEraDetail
+  useEraDetail,
+  useEraRetrieval
 } from "@/hooks/useClaimsData";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "../ui/spinner";
-import { format } from "date-fns";
+import { format, subMonths } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import PaymentDetails from "./PaymentDetails";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Calendar, FileText, RefreshCcw } from "lucide-react";
+import { DateRange } from "react-day-picker";
+import { DateRangePicker } from "../ui/date-range-picker";
 
 const EraManagement = () => {
-  const { data: eraList, isLoading: loadingEras } = useEraList();
-  const { data: unreconciledPayments, isLoading: loadingPayments } = useUnreconciledPayments();
+  const { data: eraList, isLoading: loadingEras, refetch: refetchEraList } = useEraList();
+  const { data: unreconciledPayments, isLoading: loadingPayments, refetch: refetchPayments } = useUnreconciledPayments();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("all-eras");
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
   const [selectedEraId, setSelectedEraId] = useState<string | null>(null);
   const { data: eraDetail, isLoading: loadingEraDetail } = useEraDetail(selectedEraId || '');
+
+  // Date range state for ERA retrieval
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subMonths(new Date(), 1), // Default to 1 month ago
+    to: new Date(),
+  });
+
+  const { 
+    mutate: retrieveEraFiles, 
+    isPending: isRetrievingEra 
+  } = useEraRetrieval();
 
   // Format currency amounts
   const formatCurrency = (amount: number | null | undefined) => {
@@ -58,6 +73,32 @@ const EraManagement = () => {
     setSelectedEraId(eraId);
   };
 
+  // Handle ERA retrieval with date range
+  const handleRetrieveEra = () => {
+    if (!dateRange?.from) {
+      toast({
+        title: "Date range required",
+        description: "Please select a start date for ERA retrieval",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Format dates for API
+    const fromDate = dateRange.from.toISOString().split('T')[0];
+    const toDate = dateRange.to ? dateRange.to.toISOString().split('T')[0] : fromDate;
+
+    retrieveEraFiles(
+      { fromDate, toDate },
+      {
+        onSuccess: () => {
+          refetchEraList();
+          refetchPayments();
+        }
+      }
+    );
+  };
+
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -68,8 +109,33 @@ const EraManagement = () => {
         
         <TabsContent value="all-eras" className="space-y-4">
           <Card>
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <CardTitle>ERA Files</CardTitle>
+              <div className="flex items-center space-x-2">
+                <DateRangePicker 
+                  dateRange={dateRange}
+                  onDateRangeChange={setDateRange}
+                  disabled={isRetrievingEra}
+                />
+                <Button 
+                  onClick={handleRetrieveEra}
+                  variant="outline" 
+                  className="flex items-center space-x-1"
+                  disabled={isRetrievingEra}
+                >
+                  {isRetrievingEra ? (
+                    <>
+                      <RefreshCcw className="h-4 w-4 mr-1 animate-spin" />
+                      <span>Processing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-4 w-4 mr-1" />
+                      <span>Retrieve ERA</span>
+                    </>
+                  )}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {loadingEras ? (
