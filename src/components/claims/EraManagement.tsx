@@ -253,8 +253,9 @@ export default function EraManagement() {
                         <TableCell>{log.endpoint}</TableCell>
                         <TableCell>{log.status}</TableCell>
                         <TableCell>
-                          {log.response_data?.status || 
-                           (log.status === 'error' ? 'Error' : 'OK')}
+                          {log.response_data && typeof log.response_data === 'object' && 'status' in log.response_data
+                            ? log.response_data.status
+                            : (log.status === 'error' ? 'Error' : 'OK')}
                         </TableCell>
                         <TableCell>
                           <Button 
