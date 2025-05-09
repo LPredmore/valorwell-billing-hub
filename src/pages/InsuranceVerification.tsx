@@ -1,7 +1,8 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -41,6 +42,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+
+// Type definition for error objects to help TypeScript
+interface ErrorObject {
+  error_mesg?: string;
+  error_code?: string;
+  [key: string]: any;
+}
 
 const InsuranceVerification = () => {
   const { toast } = useToast();
@@ -148,15 +157,45 @@ const InsuranceVerification = () => {
     return new Date(dateString).toLocaleString();
   };
 
+  // Helper function to safely access error code from eligibility data
+  const getErrorCode = (responseData: any): string | null => {
+    if (!responseData) return null;
+    
+    // Check if error is an array of error objects
+    if (responseData.elig?.error && Array.isArray(responseData.elig.error)) {
+      const firstError = responseData.elig.error[0];
+      return firstError?.error_code || null;
+    }
+    
+    // Check if error is a direct object with error_code
+    if (responseData.error?.error_code) {
+      return responseData.error.error_code;
+    }
+    
+    // Check if error is inside originalErrorData
+    if (responseData.originalErrorData?.error_code) {
+      return responseData.originalErrorData.error_code;
+    }
+    
+    // Check if error is inside elig
+    if (responseData.elig?.originalErrorData?.error_code) {
+      return responseData.elig.originalErrorData.error_code;
+    }
+    
+    return null;
+  };
+
   // Determine response type - expanded from just Active/Error
   const determineResponseType = (data: any): 'active' | 'not-found' | 'inactive' | 'info-needed' | 'error' | 'unknown' => {
     if (!data) return 'unknown';
     
     // Check for ClaimMD API error codes that indicate specific situations
-    if (data.error?.error_code === '75') return 'not-found';
-    if (data.error?.error_code === '70') return 'inactive';
-    if (data.error?.error_code === '60' || data.error?.error_code === '65') return 'info-needed';
-    if (data.error) return 'error';
+    const errorCode = getErrorCode(data);
+    
+    if (errorCode === '75') return 'not-found';
+    if (errorCode === '70') return 'inactive';
+    if (errorCode === '60' || errorCode === '65') return 'info-needed';
+    if (data.error || data.elig?.error) return 'error';
     
     // For eligibility "status" in the response
     const status = data.eligibility?.status?.toLowerCase();
@@ -164,7 +203,7 @@ const InsuranceVerification = () => {
     if (status === 'inactive') return 'inactive';
     
     return 'unknown';
-  }
+  };
 
   // Get a user-friendly summary of the response
   const getResponseSummary = (data: any): string => {
@@ -180,7 +219,13 @@ const InsuranceVerification = () => {
       case 'info-needed':
         return 'Missing or invalid information';
       case 'error':
-        return data.error?.error_mesg || 'Error retrieving coverage details';
+        // Safely extract error message from different possible structures
+        const errorMessage = 
+          (typeof data.error === 'object' && data.error?.error_mesg) || 
+          (data.elig?.error && Array.isArray(data.elig.error) && data.elig.error[0]?.error_mesg) ||
+          (data.originalErrorData?.error_mesg) ||
+          'Error retrieving coverage details';
+        return errorMessage;
       default:
         return 'Unable to determine coverage status';
     }
@@ -292,7 +337,25 @@ const InsuranceVerification = () => {
     if (status.toLowerCase() === 'error') {
       const client = clients?.find(c => c.eligibility_status_primary?.toLowerCase() === 'error');
       if (client) {
-        const errorCode = client?.eligibility_response_details_primary_json?.error?.error_code;
+        // Safely navigate potential error structures
+        const errorData = client?.eligibility_response_details_primary_json;
+        let errorCode = null;
+        
+        if (typeof errorData === 'object' && errorData !== null) {
+          // Check if error is an array of error objects in elig
+          if (errorData.elig?.error && Array.isArray(errorData.elig.error)) {
+            errorCode = errorData.elig.error[0]?.error_code;
+          }
+          // Check if error is a direct object with error_code
+          else if (errorData.error?.error_code) {
+            errorCode = errorData.error.error_code;
+          }
+          // Check originalErrorData
+          else if (errorData.originalErrorData?.error_code) {
+            errorCode = errorData.originalErrorData.error_code;
+          }
+        }
+        
         if (errorCode === '75') return 'Not Found';
         if (errorCode === '70') return 'Inactive';
         if (errorCode === '60' || errorCode === '65') return 'Info Needed';
@@ -319,12 +382,27 @@ const InsuranceVerification = () => {
     return null;
   };
 
-  // Get specific error details if available
-  const getErrorDetails = (client: any) => {
-    if (client?.eligibility_status_primary === 'Error' && 
-        client?.eligibility_response_details_primary_json?.error) {
-      return client.eligibility_response_details_primary_json.error;
+  // Safely extract error details from the response data
+  const getErrorDetails = (client: any): ErrorObject | null => {
+    if (!client?.eligibility_response_details_primary_json) return null;
+    
+    const responseData = client.eligibility_response_details_primary_json;
+    
+    if (typeof responseData === 'object' && responseData !== null) {
+      // Check array of errors in elig
+      if (responseData.elig?.error && Array.isArray(responseData.elig.error) && responseData.elig.error.length > 0) {
+        return responseData.elig.error[0];
+      }
+      // Check direct error object
+      if (responseData.error && typeof responseData.error === 'object') {
+        return responseData.error;
+      }
+      // Check originalErrorData
+      if (responseData.originalErrorData) {
+        return responseData.originalErrorData;
+      }
     }
+    
     return null;
   };
 
@@ -357,9 +435,12 @@ const InsuranceVerification = () => {
 
   // Get detailed error reason when possible
   const getDetailedErrorReason = (client: any) => {
+    // Get error details using our helper function 
+    const errorDetails = getErrorDetails(client);
+    const errorCode = errorDetails?.error_code;
+    
     // If explicit error code exists
-    if (client?.eligibility_response_details_primary_json?.error?.error_code) {
-      const errorCode = client.eligibility_response_details_primary_json.error.error_code;
+    if (errorCode) {
       switch(errorCode) {
         case '75': return 'Subscriber not found - verify name, DOB and policy number';
         case '67': return 'Patient not found - verify patient details';
@@ -373,16 +454,16 @@ const InsuranceVerification = () => {
       }
     }
     
-    // Look for error messages in raw response
-    if (client?.eligibility_response_details_primary_json?.error?.error_mesg) {
-      const errorMessage = client.eligibility_response_details_primary_json.error.error_mesg.toLowerCase();
+    // Look for error messages
+    if (errorDetails?.error_mesg) {
+      const errorMessage = errorDetails.error_mesg.toLowerCase();
       
       if (errorMessage.includes('not found')) return 'Member not found - verify name, DOB and policy number';
       if (errorMessage.includes('invalid')) return 'Invalid information provided - check all fields';
       if (errorMessage.includes('inactive')) return 'Coverage inactive - verify effective dates';
       if (errorMessage.includes('missing')) return 'Missing required information - check all fields';
       
-      return client.eligibility_response_details_primary_json.error.error_mesg;
+      return errorDetails.error_mesg;
     }
     
     return 'Unknown error';
@@ -551,9 +632,27 @@ const InsuranceVerification = () => {
   const getClientResponseType = (client: any) => {
     if (!client?.eligibility_response_details_primary_json) return 'unknown';
     
+    const responseData = client.eligibility_response_details_primary_json;
+    let errorCode = null;
+    
+    // Check for error code in various possible locations
+    if (typeof responseData === 'object' && responseData !== null) {
+      // Check if error is in elig.error array
+      if (responseData.elig?.error && Array.isArray(responseData.elig.error)) {
+        errorCode = responseData.elig.error[0]?.error_code;
+      }
+      // Check if error is a direct property 
+      else if (responseData.error?.error_code) {
+        errorCode = responseData.error.error_code;
+      }
+      // Check originalErrorData
+      else if (responseData.originalErrorData?.error_code) {
+        errorCode = responseData.originalErrorData.error_code;
+      }
+    }
+    
     // Check for specific error codes that indicate status rather than errors
     if (client.eligibility_status_primary === 'Error') {
-      const errorCode = client.eligibility_response_details_primary_json?.error?.error_code;
       if (errorCode === '75') return 'not-found';
       if (errorCode === '70') return 'inactive';
       if (errorCode === '60' || errorCode === '65') return 'info-needed';
@@ -727,7 +826,8 @@ const InsuranceVerification = () => {
                         <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                         <div>
                           <span className="font-medium">Error:</span> {detailedErrorReason}
-                          {errorDetails && <div className="mt-1 text-xs opacity-80">{errorDetails.error_mesg}</div>}
+                          {errorDetails && errorDetails.error_mesg && 
+                            <div className="mt-1 text-xs opacity-80">{errorDetails.error_mesg}</div>}
                         </div>
                       </div>
                     )}

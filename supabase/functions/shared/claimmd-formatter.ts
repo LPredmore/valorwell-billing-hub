@@ -110,6 +110,34 @@ export function formatEligibilityPayload(
 }
 
 /**
+ * Extract error code from various response structures
+ * 
+ * Helper function to safely navigate through different error formats
+ * returned by the Claim.MD API
+ */
+export function getErrorCode(responseData: any): string | null {
+  if (!responseData) return null;
+  
+  // Check if error is an array of error objects in elig property
+  if (responseData.elig?.error && Array.isArray(responseData.elig.error)) {
+    const firstError = responseData.elig.error[0];
+    return firstError?.error_code || null;
+  }
+  
+  // Check if error is a direct object with error_code
+  if (responseData.error && typeof responseData.error === 'object' && responseData.error.error_code) {
+    return responseData.error.error_code;
+  }
+  
+  // Check if originalErrorData contains the error code
+  if (responseData.originalErrorData?.error_code) {
+    return responseData.originalErrorData.error_code;
+  }
+  
+  return null;
+}
+
+/**
  * Maps common Claim.MD error codes to user-friendly messages
  */
 export function getClaimMdErrorMessage(errorCode: string): string {
@@ -147,8 +175,15 @@ export function determineEligibilityStatus(responseData: any): {
   let deductible = null;
   let coinsurancePercent = null;
   
-  // Check if there's error information in the response
-  if (responseData?.error || (responseData?.elig && responseData.elig.error)) {
+  // Check for errors first, using our helper function
+  const errorCode = getErrorCode(responseData);
+  
+  if (errorCode) {
+    // For specific error codes, return more descriptive statuses
+    if (errorCode === '75') return { status: 'Not Found', copay, deductible, coinsurancePercent };
+    if (errorCode === '70') return { status: 'Inactive', copay, deductible, coinsurancePercent };
+    if (errorCode === '60' || errorCode === '65') return { status: 'Info Needed', copay, deductible, coinsurancePercent };
+    
     return { status: 'Error', copay, deductible, coinsurancePercent };
   }
   
