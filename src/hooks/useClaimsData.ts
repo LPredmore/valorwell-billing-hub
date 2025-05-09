@@ -129,6 +129,7 @@ export function useEraRetrieval() {
       queryClient.invalidateQueries({ queryKey: ['billableAppointments'] });
       queryClient.invalidateQueries({ queryKey: ['eraList'] });
       queryClient.invalidateQueries({ queryKey: ['unreconciledPayments'] });
+      queryClient.invalidateQueries({ queryKey: ['apiLogs'] }); // Invalidate API logs after ERA retrieval
       toast({
         title: "ERA files retrieved",
         description: `Processed ${data.processedCount} ERA files with ${data.paymentCount} payments`,
@@ -160,6 +161,9 @@ export function useEraRetrieval() {
         // Add information about request inspection logs
         errorMessage += " - Complete request details have been logged to the database for inspection.";
       }
+      
+      // Invalidate API logs to ensure fresh data after an error
+      queryClient.invalidateQueries({ queryKey: ['apiLogs'] });
       
       toast({
         variant: "destructive",
@@ -221,5 +225,17 @@ export function useReconcilePayment() {
         description: error instanceof Error ? error.message : "An unknown error occurred",
       });
     }
+  });
+}
+
+/**
+ * Hook to fetch API logs for debugging
+ */
+export function useApiLogs(limit = 50) {
+  return useQuery({
+    queryKey: ['apiLogs', limit],
+    queryFn: () => claimsService.getApiLogs(limit),
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
   });
 }

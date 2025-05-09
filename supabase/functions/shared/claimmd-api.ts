@@ -1,4 +1,3 @@
-
 // Shared utility for interacting with the Claim.MD API
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
@@ -22,7 +21,7 @@ function getApiKey(): string {
   return apiKey;
 }
 
-// Log API interactions to the api_logs table
+// Log API interactions to the api_logs table with enhanced detail capture
 async function logApiInteraction(endpoint: string, request: any, response: any, status: string, error: string | null, clientId: string | null, processingTime: number): Promise<void> {
   try {
     await supabase
@@ -39,6 +38,108 @@ async function logApiInteraction(endpoint: string, request: any, response: any, 
   } catch (err) {
     // Just log to console if we can't log to the database
     console.error('Failed to log API interaction:', err);
+  }
+}
+
+// Function to capture and log the complete HTTP request with all headers and body
+async function logCompleteHttpRequest(method: string, url: string, headers: Record<string, string>, body: string | FormData | URLSearchParams): Promise<string> {
+  try {
+    // Format headers for display
+    const headersStr = Object.entries(headers)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n');
+    
+    // Format body based on type
+    let bodyStr = '';
+    if (body instanceof URLSearchParams) {
+      bodyStr = body.toString();
+    } else if (body instanceof FormData) {
+      bodyStr = '[FormData object - contents cannot be fully serialized]';
+    } else {
+      bodyStr = body;
+    }
+    
+    // Create complete request log with HTTP/1.1 format
+    const requestLog = `
+========== COMPLETE RAW HTTP REQUEST ==========
+${method} ${new URL(url).pathname} HTTP/1.1
+Host: ${new URL(url).host}
+${headersStr}
+
+${bodyStr}
+==============================================
+`;
+    
+    console.log(requestLog);
+    
+    // Save to api_logs for later inspection with a special marker
+    const { data, error } = await supabase
+      .from('api_logs')
+      .insert({
+        endpoint: 'raw_request_capture',
+        request_payload: {
+          method,
+          url,
+          headers: headers,
+          body: bodyStr,
+          timestamp: new Date().toISOString(),
+          formatted_request: requestLog
+        },
+        response_data: null,
+        status: 'debug',
+        error_message: null,
+        client_id: null,
+        processing_time_ms: 0
+      })
+      .select('id');
+      
+    const logId = data?.[0]?.id || 'unknown';
+    console.log(`Raw request logged with ID: ${logId}`);
+    return logId;
+      
+  } catch (err) {
+    console.error('Failed to log complete HTTP request:', err);
+    return 'error_logging';
+  }
+}
+
+// Function to capture and log the complete HTTP response
+async function logCompleteHttpResponse(logId: string, response: Response, responseBody: string): Promise<void> {
+  try {
+    // Format response headers
+    const headersStr = Array.from(response.headers.entries())
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n');
+    
+    // Create complete response log with HTTP/1.1 format
+    const responseLog = `
+========== COMPLETE RAW HTTP RESPONSE ==========
+HTTP/1.1 ${response.status} ${response.statusText}
+${headersStr}
+
+${responseBody}
+===============================================
+`;
+    
+    console.log(responseLog);
+    
+    // Update the existing log entry with response data
+    await supabase
+      .from('api_logs')
+      .update({
+        response_data: {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: responseBody,
+          timestamp: new Date().toISOString(),
+          formatted_response: responseLog
+        }
+      })
+      .eq('id', logId);
+      
+  } catch (err) {
+    console.error('Failed to log complete HTTP response:', err);
   }
 }
 
@@ -150,60 +251,7 @@ function requiresMultipartFormData(endpointPath: string): boolean {
   return lowerPath === 'upload/' || lowerPath === 'upload';
 }
 
-// Function to create a detailed log of HTTP request for inspection
-async function logCompleteHttpRequest(url: string, method: string, headers: Record<string, string>, body: string | FormData | URLSearchParams): Promise<void> {
-  try {
-    // Format headers for display
-    const headersStr = Object.entries(headers)
-      .map(([key, value]) => `${key}: ${value}`)
-      .join('\n');
-    
-    // Format body based on type
-    let bodyStr = '';
-    if (body instanceof URLSearchParams) {
-      bodyStr = body.toString();
-    } else if (body instanceof FormData) {
-      bodyStr = '[FormData object - contents cannot be fully serialized]';
-    } else {
-      bodyStr = body;
-    }
-    
-    // Create complete request log
-    const requestLog = `
-========== COMPLETE HTTP REQUEST DETAILS ==========
-${method} ${url} HTTP/1.1
-${headersStr}
-
-${bodyStr}
-=================================================
-`;
-    
-    console.log(requestLog);
-    
-    // Also save to api_logs for later inspection
-    await supabase
-      .from('api_logs')
-      .insert({
-        endpoint: 'request_inspector',
-        request_payload: {
-          method,
-          url,
-          headers: headers,
-          body: bodyStr
-        },
-        response_data: null,
-        status: 'debug',
-        error_message: null,
-        client_id: null,
-        processing_time_ms: 0
-      });
-      
-  } catch (err) {
-    console.error('Failed to log complete HTTP request:', err);
-  }
-}
-
-// The main function to call Claim.MD API endpoints
+// The main function to call Claim.MD API endpoints with enhanced logging
 export async function callClaimMdApi(
   endpoint: string,
   body: any,
@@ -330,26 +378,11 @@ export async function callClaimMdApi(
           headers['Content-Type'] = requestContentType;
         }
         
-        // Log complete HTTP request details for inspection
-        // This is especially useful for debugging ERA retrieval issues
-        if (endpoint.toLowerCase() === 'eralist' || endpoint.toLowerCase() === 'era/list' ||
-            endpoint.toLowerCase() === 'eradata' || endpoint.toLowerCase() === 'era/data') {
-          await logCompleteHttpRequest(fullUrl, 'POST', headers, serializedBody);
-        }
+        // Log the complete HTTP request with full details before sending
+        const requestLogId = await logCompleteHttpRequest('POST', fullUrl, headers, serializedBody);
         
-        // DEBUG: Log request details immediately before fetch
-        console.log('=== FULL REQUEST DETAILS ===');
-        console.log(`Method: POST`);
-        console.log(`URL: ${fullUrl}`);
-        console.log(`Headers:`, JSON.stringify(headers));
-        
-        if (!isMultipartFormData) {
-          console.log(`Body: ${typeof serializedBody === 'string' ? serializedBody : serializedBody.toString()}`);
-        } else {
-          console.log(`Body: [FormData object with AccountKey and File parts]`);
-        }
-        console.log('=== END REQUEST DETAILS ===');
-
+        // Make the request
+        console.log(`Making API request to ${fullUrl}`);
         const response = await fetch(fullUrl, {
           method: 'POST',
           headers,
@@ -364,43 +397,46 @@ export async function callClaimMdApi(
         console.log(`API response received in ${processingTime}ms with status: ${response.status} ${response.statusText}`);
         console.log(`Response headers:`, JSON.stringify(Object.fromEntries([...response.headers.entries()])));
         
-        // Determine content type from response headers
-        const responseType = getResponseType(response);
-        console.log(`Response content type determined to be: ${responseType}`);
+        // Clone the response to avoid "Body already consumed" errors
+        const responseClone = response.clone();
         
         // Always get the raw text for logging
         let responseText = await response.text();
         console.log(`Raw API response (first 500 chars): ${responseText.substring(0, 500)}`);
+        
+        // Log the complete HTTP response with full details
+        await logCompleteHttpResponse(requestLogId, responseClone, responseText);
+        
+        // Determine response type from headers  
+        const responseType = getResponseType(responseClone);
+        console.log(`Response content type determined to be: ${responseType}`);
         
         // Handle the response based on content type
         let responseData;
         let errorMessage = null;
         
         try {
-          // Process response based on content type
+          // Process response based on content type (we already have the text)
           if (responseType === 'json') {
             try {
-              // Parse the response text that we already retrieved
               responseData = JSON.parse(responseText);
               console.log(`Parsed JSON response successfully`);
               
-              // IMPORTANT: Check for Claim.MD specific error structures in the response
-              // This is critical for detecting API errors even with HTTP 200 status
+              // Check for Claim.MD specific error structures
               if (responseData && responseData.error) {
                 const errorCode = responseData.error.error_code || 'unknown';
                 const errorMsg = responseData.error.error_mesg || 'Unknown API error';
                 errorMessage = `Claim.MD API Error: ${errorMsg} (Code: ${errorCode})`;
                 console.error(errorMessage);
-              } 
+              }
               
-              // Special handling for eligibility response which may have errors in a nested structure
+              // Handle nested error structures
               if (responseData && responseData.elig && responseData.elig.error) {
                 const errorCode = responseData.elig.error[0]?.error_code || 'unknown';
                 const errorMsg = responseData.elig.error[0]?.error_mesg || 'Unknown API error';
                 errorMessage = `Claim.MD API Error: ${errorMsg} (Code: ${errorCode})`;
                 console.error(errorMessage);
                 
-                // Keep the data structure but mark it as an error for consistent handling
                 responseData.error = {
                   error_code: errorCode,
                   error_mesg: errorMsg
@@ -408,12 +444,16 @@ export async function callClaimMdApi(
               }
             } catch (jsonErr) {
               console.error('Failed to parse as JSON despite content type:', jsonErr);
-              responseData = { raw: responseText, contentType: responseType };
+              responseData = { 
+                raw: responseText, 
+                contentType: responseType,
+                parseError: jsonErr instanceof Error ? jsonErr.message : String(jsonErr)
+              };
               errorMessage = `Failed to parse JSON response: ${jsonErr instanceof Error ? jsonErr.message : String(jsonErr)}`;
             }
           } else if (responseType === 'xml') {
-            // For XML, just store as text for now
-            console.log(`Received XML response, storing as text (first 500 chars): ${responseText.substring(0, 500)}`);
+            // For XML, store as text
+            console.log(`Received XML response, storing as text`);
             responseData = { 
               raw: responseText,
               contentType: responseType,
@@ -421,7 +461,7 @@ export async function callClaimMdApi(
             };
           } else {
             // Default to text for unknown types
-            console.log(`Received plain text response (first 500 chars): ${responseText.substring(0, 500)}`);
+            console.log(`Received plain text response`);
             responseData = { 
               raw: responseText,
               contentType: responseType,
@@ -441,14 +481,13 @@ export async function callClaimMdApi(
           errorMessage = `Failed to parse response: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`;
         }
         
-        // Determine success based on HTTP status and Claim.MD error data
-        // IMPORTANT: Even with HTTP 200, consider it a failure if there's a Claim.MD error
+        // Determine success based on HTTP status and API error data
         const success = response.ok && !errorMessage;
         if (!success && !errorMessage) {
           errorMessage = `API returned status ${response.status} ${response.statusText}`;
         }
         
-        // Log the API interaction
+        // Log the API interaction to the database
         await logApiInteraction(
           endpoint,
           isMultipartFormData ? 

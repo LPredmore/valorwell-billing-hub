@@ -1,4 +1,3 @@
-
 // Edge function to retrieve and process ERA files from Claim.MD
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
@@ -256,6 +255,27 @@ async function getEraDetail(eraId: string): Promise<any> {
   return result.data;
 }
 
+// Log the complete request and response data, including all headers and body contents
+async function logFullRequestDebugData(rawRequest: any, rawResponse: any): Promise<void> {
+  try {
+    await supabase
+      .from('api_logs')
+      .insert({
+        endpoint: 'debug_capture',
+        request_payload: rawRequest,
+        response_data: rawResponse,
+        status: 'debug',
+        error_message: null,
+        client_id: null,
+        processing_time_ms: 0
+      });
+    
+    console.log("Saved full debug data to api_logs table");
+  } catch (err) {
+    console.error("Failed to save debug data:", err);
+  }
+}
+
 // Handle all requests to this function
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight requests
@@ -282,16 +302,31 @@ Deno.serve(async (req: Request) => {
     console.log(`Starting ERA retrieval from ${lastCheckDate} to ${today}`);
     console.log(`API Key exists: ${!!Deno.env.get('CLAIMMD_API_KEY')}`);
     
-    // Step 1: First call the era/list endpoint to get available ERAs
-    // Use the updated endpoint format according to API documentation
+    // Step 1: Call the era/list endpoint with enhanced logging
+    console.log("Making ERA list request with full logging enabled");
     const eraListResult = await callClaimMdApi(
-      'era/list',  // Using updated endpoint mapping
+      'era/list',
       {
         FromDate: lastCheckDate,
         ToDate: today,
         IncludeProcessed: false // Only get unprocessed ERAs
       },
       null
+    );
+    
+    // Extended debug logging for troubleshooting
+    await logFullRequestDebugData(
+      {
+        endpoint: 'era/list',
+        parameters: {
+          FromDate: lastCheckDate,
+          ToDate: today,
+          IncludeProcessed: false
+        },
+        apiKeyPresent: !!Deno.env.get('CLAIMMD_API_KEY'),
+        timestamp: new Date().toISOString()
+      },
+      eraListResult
     );
     
     if (!eraListResult.success) {
@@ -301,7 +336,12 @@ Deno.serve(async (req: Request) => {
           success: false,
           error: 'Failed to retrieve ERA list',
           details: eraListResult.error,
-          data: eraListResult.data // Include any data that might help diagnose
+          responseData: eraListResult.data,
+          requestInfo: {
+            fromDate: lastCheckDate,
+            toDate: today,
+            endpoint: 'era/list'
+          }
         }),
         { headers: { 'Content-Type': 'application/json', ...corsHeaders }, status: 500 }
       );

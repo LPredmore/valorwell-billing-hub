@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -278,6 +277,30 @@ export const claimsService = {
       return data?.[0];
     } catch (error) {
       console.error("Failed to update payment information:", error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Gets API logs for debugging HTTP requests and responses
+   */
+  async getApiLogs(limit = 50) {
+    try {
+      const { data, error } = await supabase
+        .from('api_logs')
+        .select('*')
+        .or('endpoint.eq.era/list,endpoint.eq.era/data,endpoint.eq.raw_request_capture,endpoint.eq.debug_capture')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.error("Error fetching API logs:", error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Failed to fetch API logs:", error);
       throw error;
     }
   }
