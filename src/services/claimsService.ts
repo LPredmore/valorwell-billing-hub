@@ -173,6 +173,27 @@ export const claimsService = {
   },
 
   /**
+   * Test the ERA API with specific parameters for debugging
+   */
+  async testEraApi(testParams: { testNumber?: number, runAllTests?: boolean }) {
+    try {
+      const { data, error } = await supabase.functions.invoke('era-retrieval', {
+        body: testParams,
+      });
+
+      if (error) {
+        console.error("Error testing ERA API:", error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error("Failed to run ERA API tests:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Gets a list of all processed ERA files
    */
   async getEraList() {

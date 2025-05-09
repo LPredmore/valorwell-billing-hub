@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect } from "react";
 import { useEraList, useEraRetrieval, useUnreconciledPayments, useReconcilePayment, useApiLogs } from "@/hooks/useClaimsData";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, RefreshCcw, AlertCircle, CheckCircle, FileText, DollarSign, Bug, Code } from "lucide-react";
+import { Loader2, RefreshCcw, AlertCircle, CheckCircle, FileText, DollarSign, Bug, Code, Wrench } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -34,10 +35,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import EraApiTester from "./EraApiTester";
 
 export default function EraManagement() {
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const [showDebugLogs, setShowDebugLogs] = useState(false);
+  const [showApiTester, setShowApiTester] = useState(false);
   const [selectedDebugLog, setSelectedDebugLog] = useState<any>(null);
   const { data: eraList = [], isLoading: isLoadingEraList, error: eraListError } = useEraList();
   const { data: unreconciledPayments = [], isLoading: isLoadingUnreconciled, error: unreconciledError } = useUnreconciledPayments();
@@ -173,6 +176,14 @@ export default function EraManagement() {
         <h2 className="text-xl font-semibold">ERA Management</h2>
         <div className="flex space-x-2">
           <Button 
+            onClick={() => setShowApiTester(!showApiTester)}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <Wrench className="h-4 w-4" />
+            {showApiTester ? "Hide API Tester" : "API Tester"}
+          </Button>
+          <Button 
             onClick={() => setShowDebugLogs(!showDebugLogs)}
             variant="outline"
             className="flex items-center gap-2"
@@ -211,6 +222,9 @@ export default function EraManagement() {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* API Tester Section */}
+      {showApiTester && <EraApiTester />}
 
       {/* Debug Logs Section */}
       {showDebugLogs && (

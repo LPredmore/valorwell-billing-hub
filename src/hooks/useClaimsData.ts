@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { claimsService } from "@/services/claimsService";
 import { toast } from "@/hooks/use-toast";
@@ -118,6 +117,45 @@ export function useEraPaymentData(appointmentId: string) {
 }
 
 /**
+ * Hook to run specific API tests for ERA retrieval debugging
+ */
+export function useEraApiTest() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ 
+      testNumber, 
+      runAllTests = false 
+    }: { 
+      testNumber?: number, 
+      runAllTests?: boolean 
+    }) => {
+      if (runAllTests) {
+        return claimsService.testEraApi({ runAllTests: true });
+      } else if (testNumber !== undefined) {
+        return claimsService.testEraApi({ testNumber });
+      } else {
+        throw new Error("Either testNumber or runAllTests must be provided");
+      }
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['apiLogs'] });
+      toast({
+        title: "ERA API Test Complete",
+        description: `Test ${data.testResults ? "suite" : "case"} executed successfully`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "ERA API Test Failed",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+      });
+    }
+  });
+}
+
+/**
  * Hook to fetch ERA files
  */
 export function useEraRetrieval() {
@@ -141,9 +179,10 @@ export function useEraRetrieval() {
       
       // Try to extract the most useful error information
       if (error instanceof Error) {
+        // Extract more meaningful error messages
         errorMessage = error.message;
         
-        // Look for specific error patterns in the response
+        // Look for specific API error patterns in the response
         if (typeof error.message === 'string') {
           // Handle date format errors
           if (error.message.includes('date') && error.message.includes('format')) {

@@ -1,4 +1,3 @@
-
 // Edge function to retrieve and process ERA files from Claim.MD
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
@@ -295,6 +294,108 @@ async function logFullRequestDebugData(rawRequest: any, rawResponse: any): Promi
   }
 }
 
+// Run a specific API test case and capture results
+async function runApiTest(testNumber: number): Promise<any> {
+  console.log(`Running API Test #${testNumber}`);
+  
+  let requestBody: Record<string, string> = {};
+  const apiKey = Deno.env.get('CLAIMMD_API_KEY') as string;
+  
+  // Always include the API key
+  requestBody.AccountKey = apiKey;
+  
+  // Configure the test parameters based on test number
+  switch (testNumber) {
+    case 1:
+      // Test 1: Absolute Minimal Request (Just API Key and NewOnly=1)
+      requestBody.NewOnly = "1";
+      break;
+      
+    case 2:
+      // Test 2: Minimal Request - All ERAs (NewOnly=0)
+      requestBody.NewOnly = "0";
+      break;
+      
+    case 3:
+      // Test 3: Date Parameter Only (ReceivedAfterDate)
+      requestBody.ReceivedAfterDate = "05-01-2025";
+      break;
+      
+    case 4:
+      // Test 4: Date Range Without NewOnly
+      requestBody.ReceivedAfterDate = "05-09-2025";
+      requestBody.ReceivedBeforeDate = "05-09-2025";
+      break;
+      
+    default:
+      return { error: "Invalid test number. Must be 1-4." };
+  }
+  
+  console.log(`Test ${testNumber} Request Body:`, JSON.stringify(requestBody));
+  
+  try {
+    // Store raw request for detailed logging
+    const rawRequestInfo = {
+      testNumber,
+      parameters: requestBody,
+      timestamp: new Date().toISOString(),
+      apiKeyPresent: !!apiKey
+    };
+    
+    // Make the API call using the claimmd-api shared module
+    const result = await callClaimMdApi(
+      'eralist',
+      requestBody,
+      null
+    );
+    
+    // Save the complete raw request and response for diagnostic purposes
+    await logFullRequestDebugData(
+      rawRequestInfo,
+      result
+    );
+    
+    // Prepare a comprehensive test result object
+    return {
+      testNumber,
+      requestBody,
+      success: result.success,
+      statusCode: result.data?.status || (result.success ? 200 : 400),
+      headers: result.data?.headers || {},
+      responseData: result.data,
+      error: result.error,
+      timestamp: new Date().toISOString()
+    };
+  } catch (err) {
+    console.error(`Error in test ${testNumber}:`, err);
+    return {
+      testNumber,
+      requestBody,
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
+// Run all test cases sequentially and return results
+async function runAllApiTests(): Promise<any[]> {
+  const results = [];
+  
+  for (let testNum = 1; testNum <= 4; testNum++) {
+    console.log(`Starting test ${testNum} of 4...`);
+    const result = await runApiTest(testNum);
+    results.push(result);
+    
+    // Add a small delay between tests to avoid rate limiting
+    if (testNum < 4) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  
+  return results;
+}
+
 // Make a simplified test request with minimal parameters
 async function makeSimplifiedTestRequest(): Promise<any> {
   console.log("Making simplified test request with minimal parameters");
@@ -339,6 +440,40 @@ Deno.serve(async (req: Request) => {
       );
     }
     
+    // Parse request body to check if this is a test mode request
+    let requestBody = {};
+    try {
+      requestBody = await req.json();
+    } catch (e) {
+      // If not JSON, default to empty object
+      requestBody = {};
+    }
+    
+    // Check for test mode
+    if (requestBody && typeof requestBody === 'object') {
+      // Test mode - single test
+      if ('testNumber' in requestBody && typeof requestBody.testNumber === 'number') {
+        const testNumber = requestBody.testNumber;
+        if (testNumber >= 1 && testNumber <= 4) {
+          const testResult = await runApiTest(testNumber);
+          return new Response(
+            JSON.stringify({ success: true, testResult }),
+            { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          );
+        }
+      }
+      
+      // Test mode - run all tests
+      if ('runAllTests' in requestBody && requestBody.runAllTests === true) {
+        const testResults = await runAllApiTests();
+        return new Response(
+          JSON.stringify({ success: true, testResults }),
+          { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+    }
+    
+    // Standard ERA retrieval functionality - rest of the original function
     // Get the last ERA check date
     const lastCheckDate = await getLastEraCheck();
     const today = new Date().toISOString().split('T')[0]; // Today in YYYY-MM-DD format
