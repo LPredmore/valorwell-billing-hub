@@ -6,13 +6,39 @@ import { useToast } from "@/components/ui/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, AlertCircle, AlertTriangle, CheckCircle2, HelpCircle, RefreshCw } from "lucide-react";
+import { 
+  Loader2, 
+  AlertCircle, 
+  AlertTriangle, 
+  CheckCircle2, 
+  HelpCircle, 
+  RefreshCw,
+  PlusCircle, 
+  Calendar,
+  DollarSign,
+  Percent,
+  Info
+} from "lucide-react";
+import { 
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 
 const InsuranceVerification = () => {
   const { toast } = useToast();
   const [isChecking, setIsChecking] = useState<boolean>(false);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [expandedDetails, setExpandedDetails] = useState<string | null>(null);
   
   // Fetch clients for verification - Updated query to include all needed fields
   const { data: clients, isLoading: isLoadingClients, refetch } = useQuery({
@@ -117,6 +143,8 @@ const InsuranceVerification = () => {
       case 'inactive':
       case 'error':
         return 'text-red-600';
+      case 'pending':
+        return 'text-amber-600';
       default:
         return 'text-yellow-600';
     }
@@ -133,6 +161,8 @@ const InsuranceVerification = () => {
         return <AlertCircle className="h-5 w-5 text-red-600" />;
       case 'error':
         return <AlertTriangle className="h-5 w-5 text-red-600" />;
+      case 'pending':
+        return <Loader2 className="h-5 w-5 text-amber-600" />;
       default:
         return <HelpCircle className="h-5 w-5 text-yellow-600" />;
     }
@@ -172,10 +202,169 @@ const InsuranceVerification = () => {
         insuranceName: payload.ins_name,
         subscriberName: `${payload.ins_name_f} ${payload.ins_name_l}`,
         payerId: payload.payerid,
-        serviceDate: payload.fdos
+        serviceDate: payload.fdos,
+        relationship: getRelationshipText(payload.pat_rel)
       };
     }
     return null;
+  };
+
+  // Get human-readable relationship text based on code
+  const getRelationshipText = (relationCode: string) => {
+    const relationships: Record<string, string> = {
+      "18": "Self",
+      "01": "Spouse",
+      "19": "Child",
+      "G8": "Dependent",
+    };
+    return relationships[relationCode] || relationCode;
+  };
+
+  // Get detailed error reason when possible
+  const getDetailedErrorReason = (client: any) => {
+    // If explicit error code exists
+    if (client?.eligibility_response_details_primary_json?.error?.error_code) {
+      const errorCode = client.eligibility_response_details_primary_json.error.error_code;
+      switch(errorCode) {
+        case '75': return 'Subscriber not found';
+        case '67': return 'Patient not found';
+        case '70': return 'Insurance not active';
+        case '20': return 'API authentication error';
+        case '50': return 'Invalid service requested';
+        case '60': return 'Missing required information';
+        case '65': return 'Invalid insurance information';
+        case '80': return 'Network error or timeout';
+        default: return `Error code: ${errorCode}`;
+      }
+    }
+    
+    // Look for error messages in raw response
+    if (client?.eligibility_response_details_primary_json?.error?.error_mesg) {
+      const errorMessage = client.eligibility_response_details_primary_json.error.error_mesg.toLowerCase();
+      
+      if (errorMessage.includes('not found')) return 'Member not found';
+      if (errorMessage.includes('invalid')) return 'Invalid information provided';
+      if (errorMessage.includes('inactive')) return 'Coverage inactive';
+      if (errorMessage.includes('missing')) return 'Missing required information';
+      
+      return client.eligibility_response_details_primary_json.error.error_mesg;
+    }
+    
+    return 'Unknown error';
+  };
+
+  // Get coverage period if available
+  const getCoveragePeriod = (client: any) => {
+    if (client?.eligibility_response_details_primary_json?.elig?.benefit) {
+      const benefits = client.eligibility_response_details_primary_json.elig.benefit;
+      
+      // Look for plan date entries
+      const coverageBenefit = benefits.find((benefit: any) => 
+        benefit.benefit_information?.includes('plan date') || 
+        benefit.benefit_coverage_description?.toLowerCase().includes('eligibility begin')
+      );
+      
+      if (coverageBenefit) {
+        // Try to extract dates from various fields
+        return {
+          startDate: coverageBenefit.benefit_eligibility_start || coverageBenefit.benefit_begin_date,
+          endDate: coverageBenefit.benefit_eligibility_end || coverageBenefit.benefit_end_date,
+        };
+      }
+    }
+    
+    return null;
+  };
+
+  // Get plan name from response data
+  const getPlanName = (client: any) => {
+    if (client?.eligibility_response_details_primary_json?.elig) {
+      return client.eligibility_response_details_primary_json.elig.plan_name || 
+             client.eligibility_response_details_primary_json.elig.plan_description || 
+             client.eligibility_response_details_primary_json.elig.plan_number;
+    }
+    
+    return null;
+  };
+
+  // Get network status (in/out of network)
+  const getNetworkStatus = (client: any) => {
+    if (client?.eligibility_response_details_primary_json?.elig?.benefit) {
+      const benefits = client.eligibility_response_details_primary_json.elig.benefit;
+      
+      // Check for in-network specifically for service code 98 (Mental Health)
+      const networkBenefit = benefits.find((benefit: any) => 
+        benefit.benefit_code === '98' && 
+        benefit.benefit_network_ind
+      );
+      
+      if (networkBenefit) {
+        return networkBenefit.benefit_network_ind === 'Y' ? 'In Network' : 'Out of Network';
+      }
+    }
+    
+    return 'Network status unknown';
+  };
+
+  // Get additional benefit details
+  const getAdditionalBenefits = (client: any) => {
+    const benefits = [];
+    
+    if (client?.eligibility_response_details_primary_json?.elig?.benefit) {
+      const rawBenefits = client.eligibility_response_details_primary_json.elig.benefit;
+      
+      // Look for specific mental health benefits
+      const mentalHealthBenefits = rawBenefits.filter((benefit: any) => 
+        benefit.benefit_code === '98' || 
+        (benefit.benefit_coverage_description && 
+          (benefit.benefit_coverage_description.toLowerCase().includes('mental') || 
+           benefit.benefit_coverage_description.toLowerCase().includes('behavioral')))
+      );
+      
+      // Process each benefit for display
+      mentalHealthBenefits.forEach((benefit: any) => {
+        // Skip if we don't have a meaningful description
+        if (!benefit.benefit_coverage_description) return;
+        
+        const benefitInfo = {
+          description: benefit.benefit_coverage_description,
+          amount: benefit.benefit_amount || benefit.benefit_percent || null,
+          network: benefit.benefit_network_ind === 'Y' ? 'In Network' : 
+                  benefit.benefit_network_ind === 'N' ? 'Out of Network' : null,
+          coverageLevel: benefit.benefit_coverage_level || null,
+        };
+        
+        benefits.push(benefitInfo);
+      });
+    }
+    
+    return benefits.length > 0 ? benefits : null;
+  };
+
+  // Get remaining deductible information if available
+  const getDeductibleInfo = (client: any) => {
+    if (!client?.eligibility_response_details_primary_json?.elig?.benefit) {
+      return null;
+    }
+    
+    const benefits = client.eligibility_response_details_primary_json.elig.benefit;
+    let deductibleInfo = null;
+    
+    // Look for deductible information
+    const deductibleBenefit = benefits.find((benefit: any) => 
+      (benefit.benefit_coverage_description && 
+       benefit.benefit_coverage_description.toLowerCase().includes('deductible'))
+    );
+    
+    if (deductibleBenefit) {
+      deductibleInfo = {
+        total: deductibleBenefit.benefit_amount || client.eligibility_deductible_primary || null,
+        remaining: deductibleBenefit.benefit_remaining || null,
+        type: deductibleBenefit.benefit_coverage_description || 'Deductible',
+      };
+    }
+    
+    return deductibleInfo;
   };
 
   return (
@@ -215,32 +404,50 @@ const InsuranceVerification = () => {
           {clients?.map((client) => {
             const warningMessage = getMissingInfoWarning(client);
             const errorDetails = getErrorDetails(client);
+            const detailedErrorReason = client.eligibility_status_primary === 'Error' ? getDetailedErrorReason(client) : null;
             const canCheckEligibility = hasRequiredInformation(client);
             const statusIcon = getStatusIcon(client.eligibility_status_primary);
             const lastRequestData = getLastRequestData(client);
+            const coveragePeriod = getCoveragePeriod(client);
+            const planName = getPlanName(client);
+            const networkStatus = client.eligibility_status_primary === 'Active' ? getNetworkStatus(client) : null;
+            const additionalBenefits = client.eligibility_status_primary === 'Active' ? getAdditionalBenefits(client) : null;
+            const deductibleInfo = client.eligibility_status_primary === 'Active' ? getDeductibleInfo(client) : null;
+            const isExpanded = expandedDetails === client.id;
             
             return (
               <Card key={client.id} className={selectedClientId === client.id ? "border-primary" : ""}>
                 <CardHeader>
                   <CardTitle>{client.client_first_name} {client.client_last_name}</CardTitle>
-                  <CardDescription>{client.client_insurance_company_primary || 'No insurance on file'}</CardDescription>
+                  <CardDescription className="flex items-center justify-between">
+                    <span>{client.client_insurance_company_primary || 'No insurance on file'}</span>
+                    {client.eligibility_status_primary && (
+                      <Badge variant={client.eligibility_status_primary.toLowerCase() === 'active' ? 'default' : 'outline'}>
+                        {client.eligibility_status_primary}
+                      </Badge>
+                    )}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {warningMessage && (
                       <div className="flex items-center text-amber-600 text-sm mb-2">
-                        <AlertTriangle className="h-4 w-4 mr-1" />
+                        <AlertTriangle className="h-4 w-4 mr-1 flex-shrink-0" />
                         <span>{warningMessage}</span>
                       </div>
                     )}
-                    {errorDetails && (
+                    
+                    {/* Show detailed error information */}
+                    {detailedErrorReason && (
                       <div className="flex items-start space-x-2 text-red-600 text-sm mb-2 bg-red-50 p-2 rounded">
                         <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                         <div>
-                          <span className="font-medium">API Error:</span> {errorDetails}
+                          <span className="font-medium">Reason:</span> {detailedErrorReason}
+                          {errorDetails && <div className="mt-1 text-xs opacity-80">{errorDetails}</div>}
                         </div>
                       </div>
                     )}
+
                     <div className="flex justify-between items-center">
                       <span className="font-medium">Status:</span>
                       <div className={`flex items-center ${getStatusColor(client.eligibility_status_primary)}`}>
@@ -250,36 +457,164 @@ const InsuranceVerification = () => {
                         </span>
                       </div>
                     </div>
+                    
                     <div className="flex justify-between">
                       <span className="font-medium">Last checked:</span>
                       <span className="text-gray-600">{formatDate(client.eligibility_last_checked_primary)}</span>
                     </div>
-                    {client.eligibility_status_primary === 'Active' && (
-                      <div className="mt-2 pt-2 border-t border-gray-100">
-                        <div className="text-sm font-medium text-gray-700">Benefits:</div>
-                        <div className="text-sm grid grid-cols-2 gap-1 mt-1">
-                          <span className="text-gray-500">Copay:</span>
-                          <span className="text-right">{client.eligibility_copay_primary || 'N/A'}</span>
-                          
-                          <span className="text-gray-500">Deductible:</span>
-                          <span className="text-right">{client.eligibility_deductible_primary || 'N/A'}</span>
-                          
-                          <span className="text-gray-500">Coinsurance:</span>
-                          <span className="text-right">
-                            {client.eligibility_coinsurance_primary_percent 
-                              ? `${client.eligibility_coinsurance_primary_percent}%` 
-                              : 'N/A'}
-                          </span>
-                        </div>
+
+                    {/* Display relationship information */}
+                    {lastRequestData && lastRequestData.relationship && (
+                      <div className="flex justify-between">
+                        <span className="font-medium">Relationship:</span>
+                        <span className="text-gray-600">{lastRequestData.relationship}</span>
                       </div>
+                    )}
+
+                    {/* Show plan name if available */}
+                    {planName && (
+                      <div className="flex justify-between">
+                        <span className="font-medium">Plan:</span>
+                        <span className="text-gray-600">{planName}</span>
+                      </div>
+                    )}
+
+                    {/* Show coverage period if available */}
+                    {coveragePeriod && (
+                      <div className="flex justify-between">
+                        <span className="font-medium">Coverage period:</span>
+                        <span className="text-gray-600">
+                          {coveragePeriod.startDate ? 
+                            new Date(coveragePeriod.startDate).toLocaleDateString() : 'Unknown'} - {coveragePeriod.endDate ? 
+                            new Date(coveragePeriod.endDate).toLocaleDateString() : 'Current'}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Show network status if active */}
+                    {networkStatus && (
+                      <div className="flex justify-between">
+                        <span className="font-medium">Network status:</span>
+                        <span className="text-gray-600">{networkStatus}</span>
+                      </div>
+                    )}
+                    
+                    {client.eligibility_status_primary === 'Active' && (
+                      <>
+                        {/* Display basic benefits information */}
+                        <div className="mt-2 pt-2 border-t border-gray-100">
+                          <div className="text-sm font-medium text-gray-700">Benefits:</div>
+                          <div className="text-sm grid grid-cols-2 gap-1 mt-1">
+                            <span className="text-gray-500 flex items-center">
+                              <DollarSign className="h-3 w-3 mr-1" />Copay:
+                            </span>
+                            <span className="text-right">
+                              {client.eligibility_copay_primary ? 
+                                `$${client.eligibility_copay_primary}` : 'N/A'}
+                            </span>
+                            
+                            <span className="text-gray-500 flex items-center">
+                              <DollarSign className="h-3 w-3 mr-1" />Deductible:
+                            </span>
+                            <span className="text-right">
+                              {client.eligibility_deductible_primary ? 
+                                `$${client.eligibility_deductible_primary}` : 'N/A'}
+                              {deductibleInfo?.remaining && 
+                                ` (${deductibleInfo.remaining} remaining)`}
+                            </span>
+                            
+                            <span className="text-gray-500 flex items-center">
+                              <Percent className="h-3 w-3 mr-1" />Coinsurance:
+                            </span>
+                            <span className="text-right">
+                              {client.eligibility_coinsurance_primary_percent 
+                                ? `${client.eligibility_coinsurance_primary_percent}%` 
+                                : 'N/A'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Add collapsible for additional benefits */}
+                        {additionalBenefits && additionalBenefits.length > 0 && (
+                          <Collapsible
+                            open={isExpanded}
+                            onOpenChange={() => setExpandedDetails(isExpanded ? null : client.id)}
+                            className="mt-2 border-t border-gray-100 pt-2"
+                          >
+                            <CollapsibleTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                className="text-xs w-full flex items-center justify-between p-1 h-auto"
+                              >
+                                <span>Additional Benefits</span>
+                                <PlusCircle className="h-3 w-3 flex-shrink-0" />
+                              </Button>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="text-xs space-y-2 mt-2">
+                              {additionalBenefits.map((benefit: any, index: number) => (
+                                <div key={index} className="border-b border-gray-100 pb-1">
+                                  <div className="font-medium">{benefit.description}</div>
+                                  {benefit.amount && (
+                                    <div>
+                                      Amount: {typeof benefit.amount === 'number' && benefit.amount > 0 ? 
+                                        `$${benefit.amount}` : benefit.amount}
+                                    </div>
+                                  )}
+                                  {benefit.network && <div>Network: {benefit.network}</div>}
+                                </div>
+                              ))}
+                            </CollapsibleContent>
+                          </Collapsible>
+                        )}
+
+                        {/* View full details dialog */}
+                        {client.eligibility_response_details_primary_json && (
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="link" size="sm" className="text-xs px-0 mt-1 h-auto">
+                                <Info className="h-3 w-3 mr-1" />
+                                View all data
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto">
+                              <DialogHeader>
+                                <DialogTitle>Full Eligibility Response</DialogTitle>
+                              </DialogHeader>
+                              <div className="mt-4 text-xs">
+                                <pre className="whitespace-pre-wrap bg-muted p-4 rounded overflow-auto max-h-96">
+                                  {JSON.stringify(client.eligibility_response_details_primary_json, null, 2)}
+                                </pre>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        )}
+                      </>
                     )}
 
                     {client.eligibility_status_primary === 'Error' && lastRequestData && (
                       <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-500">
                         <div className="font-medium mb-1">Last request data:</div>
-                        <div>Policy: {lastRequestData.policyNumber}</div>
-                        <div>Subscriber: {lastRequestData.subscriberName}</div>
-                        <div>Payer ID: {lastRequestData.payerId || 'Not provided'}</div>
+                        <div className="grid grid-cols-2 gap-1">
+                          <span className="text-gray-500">Policy:</span>
+                          <span>{lastRequestData.policyNumber}</span>
+                          
+                          <span className="text-gray-500">Subscriber:</span>
+                          <span>{lastRequestData.subscriberName}</span>
+                          
+                          <span className="text-gray-500">Relationship:</span>
+                          <span>{lastRequestData.relationship}</span>
+                          
+                          <span className="text-gray-500">Payer ID:</span>
+                          <span>{lastRequestData.payerId || 'Not provided'}</span>
+                          
+                          <span className="text-gray-500">Service Date:</span>
+                          <span>
+                            {lastRequestData.serviceDate ? 
+                              formatDate(lastRequestData.serviceDate.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')) : 
+                              'Not provided'}
+                          </span>
+                        </div>
                       </div>
                     )}
                   </div>
