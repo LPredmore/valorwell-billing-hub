@@ -158,6 +158,8 @@ export const claimsService = {
    */
   async retrieveEraFiles(dateRange?: { fromDate: string; toDate: string }) {
     try {
+      console.log('Retrieving ERA files with date range:', dateRange);
+      
       const { data, error } = await supabase.functions.invoke('era-retrieval', {
         body: dateRange || {},
       });
@@ -167,6 +169,7 @@ export const claimsService = {
         throw error;
       }
 
+      console.log('ERA retrieval response:', data);
       return data;
     } catch (error) {
       console.error("Failed to retrieve ERA files:", error);

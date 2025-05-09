@@ -41,6 +41,9 @@ const EraManagement = () => {
     from: subMonths(new Date(), 1), // Default to 1 month ago
     to: new Date(),
   });
+  
+  // Debug state for date range
+  const [lastUsedDateRange, setLastUsedDateRange] = useState<{from: string, to: string} | null>(null);
 
   const { 
     mutate: retrieveEraFiles, 
@@ -84,16 +87,31 @@ const EraManagement = () => {
       return;
     }
 
-    // Format dates for API
+    // Format dates for API - ensure correct ISO format YYYY-MM-DD
     const fromDate = dateRange.from.toISOString().split('T')[0];
     const toDate = dateRange.to ? dateRange.to.toISOString().split('T')[0] : fromDate;
+    
+    // Store the date range we're using for debugging
+    setLastUsedDateRange({from: fromDate, to: toDate});
+    
+    console.log(`Retrieving ERAs from ${fromDate} to ${toDate}`);
 
     retrieveEraFiles(
       { fromDate, toDate },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
           refetchEraList();
           refetchPayments();
+          // Log the date range that was used in the request and response
+          console.log('ERA retrieval successful with date range:', data.dateRange);
+        },
+        onError: (error) => {
+          console.error('ERA retrieval failed:', error);
+          toast({
+            title: "Date range error",
+            description: "Failed to retrieve ERAs with the selected date range. Check console for details.",
+            variant: "destructive",
+          });
         }
       }
     );
@@ -138,6 +156,12 @@ const EraManagement = () => {
               </div>
             </CardHeader>
             <CardContent>
+              {lastUsedDateRange && (
+                <div className="mb-4 text-sm text-muted-foreground">
+                  Last search: {format(new Date(lastUsedDateRange.from), 'MMM dd, yyyy')} to {format(new Date(lastUsedDateRange.to), 'MMM dd, yyyy')}
+                </div>
+              )}
+              
               {loadingEras ? (
                 <div className="flex justify-center py-8">
                   <Spinner size="lg" />

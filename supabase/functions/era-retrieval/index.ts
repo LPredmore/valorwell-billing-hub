@@ -1,4 +1,3 @@
-
 // Edge function to retrieve and process ERA files from Claim.MD
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
@@ -677,6 +676,38 @@ async function makeSimplifiedTestRequest(): Promise<any> {
   return result;
 }
 
+// Log detailed date range information for debugging
+async function logDateRangeDebugInfo(fromDate: string, toDate: string, formattedFromDate: string, formattedToDate: string, rawRequestBody: any): Promise<void> {
+  try {
+    await supabase
+      .from('api_logs')
+      .insert({
+        endpoint: 'era_date_range_debug',
+        request_payload: {
+          rawDates: {
+            fromDate,
+            toDate,
+          },
+          formattedDates: {
+            formattedFromDate,
+            formattedToDate,
+          },
+          requestBody: rawRequestBody,
+          timestamp: new Date().toISOString()
+        },
+        response_data: null,
+        status: 'debug',
+        error_message: null,
+        client_id: null,
+        processing_time_ms: 0
+      });
+    
+    console.log(`Date range debug information logged: FROM=${fromDate} (${formattedFromDate}) TO=${toDate} (${formattedToDate})`);
+  } catch (err) {
+    console.error("Failed to log date range debug information:", err);
+  }
+}
+
 // Handle all requests to this function
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight requests
@@ -700,8 +731,10 @@ Deno.serve(async (req: Request) => {
     let requestBody: any = {};
     try {
       requestBody = await req.json();
+      console.log("Request body received:", JSON.stringify(requestBody));
     } catch (e) {
       // If not JSON, default to empty object
+      console.error("Failed to parse request body as JSON:", e);
       requestBody = {};
     }
     
@@ -753,19 +786,34 @@ Deno.serve(async (req: Request) => {
     console.log(`Formatted for Claim.MD: ${formattedFromDate} to ${formattedToDate}`);
     console.log(`API Key exists: ${!!Deno.env.get('CLAIMMD_API_KEY')}`);
     
+    // Log detailed date range information for debugging
+    const dateRangeRequestBody = {
+      fromDate,
+      toDate,
+      formattedFromDate,
+      formattedToDate,
+      requestSourceType: typeof requestBody.fromDate,
+      requestSourceValue: requestBody.fromDate
+    };
+    await logDateRangeDebugInfo(fromDate, toDate, formattedFromDate, formattedToDate, dateRangeRequestBody);
+    
     // Optional: First try a minimal test request to validate API connectivity
     const testResult = await makeSimplifiedTestRequest();
     console.log("Test request result:", testResult.success ? "Success" : "Failed");
     
     // Step 1: Call the eralist endpoint with enhanced logging and correct parameters
     console.log("Making ERA list request with full logging enabled");
+    const requestParams = {
+      ReceivedAfterDate: formattedFromDate,  // MM-DD-YYYY format
+      ReceivedBeforeDate: formattedToDate,   // MM-DD-YYYY format
+      NewOnly: "1"                           // Use "1" instead of boolean false
+    };
+    
+    console.log("ERA request parameters:", JSON.stringify(requestParams));
+    
     const eraListResult = await callClaimMdApi(
       'eralist',  // Using corrected endpoint name
-      {
-        ReceivedAfterDate: formattedFromDate,  // MM-DD-YYYY format
-        ReceivedBeforeDate: formattedToDate,   // MM-DD-YYYY format
-        NewOnly: "1"                           // Use "1" instead of boolean false
-      },
+      requestParams,
       null
     );
     
@@ -773,11 +821,7 @@ Deno.serve(async (req: Request) => {
     await logFullRequestDebugData(
       {
         endpoint: 'eralist',
-        parameters: {
-          ReceivedAfterDate: formattedFromDate,
-          ReceivedBeforeDate: formattedToDate,
-          NewOnly: "1"
-        },
+        parameters: requestParams,
         originalDates: {
           fromDate,
           toDate
@@ -827,7 +871,9 @@ Deno.serve(async (req: Request) => {
           message: "No new ERA files to process",
           dateRange: {
             from: fromDate,
-            to: toDate
+            to: toDate,
+            formattedFrom: formattedFromDate,
+            formattedTo: formattedToDate
           }
         }),
         { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
@@ -883,7 +929,9 @@ Deno.serve(async (req: Request) => {
         processedEras: processedEras,
         dateRange: {
           from: fromDate,
-          to: toDate
+          to: toDate,
+          formattedFrom: formattedFromDate,
+          formattedTo: formattedToDate
         },
         message: `Successfully processed ${totalProcessed} ERA records with ${totalPayments} payments`
       }),
