@@ -2,8 +2,8 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
-// Updated API base URL per documentation v1.17
-const CLAIMMD_BASE_URL = 'https://api.claim.md/services';
+// Updated API base URL to use svc.claim.md as per documentation v1.17
+const CLAIMMD_BASE_URL = 'https://svc.claim.md/services';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') as string;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string;
 
@@ -206,14 +206,14 @@ function flattenObject(obj: any, prefix = ''): Record<string, string> {
   }, {});
 }
 
-// Map endpoint aliases to their full API paths
+// Map endpoint aliases to their full API paths - updated to use correct endpoint names
 const endpointMap: Record<string, string> = {
-  'eralist': 'era/list/',
-  'era/list': 'era/list/',
-  'eradata': 'era/data/',
-  'era/data': 'era/data/',
-  'era835': 'era/835/',
-  'era/835': 'era/835/',
+  'eralist': 'eralist/',
+  'era/list': 'eralist/',
+  'eradata': 'eradata/',
+  'era/data': 'eradata/',
+  'era835': 'era835/',
+  'era/835': 'era835/',
   // Add other endpoints as needed
 };
 
@@ -229,20 +229,20 @@ function resolveEndpoint(endpoint: string): string {
   return endpoint.endsWith('/') ? endpoint : `${endpoint}/`;
 }
 
-// Determine if an endpoint should use URL-encoded form data
+// Determine if an endpoint should use URL-encoded form data - updated with corrected endpoint names
 function requiresUrlEncodedData(endpointPath: string): boolean {
   const lowerPath = endpointPath.toLowerCase();
   return lowerPath.includes('elig') || 
          lowerPath.includes('eligibility') || 
          lowerPath === 'eralist' || 
          lowerPath === 'era/list' ||
-         lowerPath === 'era/list/' || 
+         lowerPath === 'eralist/' || 
          lowerPath === 'eradata' || 
          lowerPath === 'era/data' ||
-         lowerPath === 'era/data/' || 
+         lowerPath === 'eradata/' || 
          lowerPath === 'era835' ||
          lowerPath === 'era/835' ||
-         lowerPath === 'era/835/';
+         lowerPath === 'era835/';
 }
 
 // Determine if an endpoint should use multipart form data

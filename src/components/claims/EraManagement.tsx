@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useEraList, useEraRetrieval, useUnreconciledPayments, useReconcilePayment, useApiLogs } from "@/hooks/useClaimsData";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -253,9 +252,12 @@ export default function EraManagement() {
                         <TableCell>{log.endpoint}</TableCell>
                         <TableCell>{log.status}</TableCell>
                         <TableCell>
-                          {log.response_data && typeof log.response_data === 'object' && 'status' in log.response_data
-                            ? log.response_data.status
-                            : (log.status === 'error' ? 'Error' : 'OK')}
+                          {log.response_data && typeof log.response_data === 'object' && 
+                           'status' in log.response_data && 
+                           (typeof log.response_data.status === 'string' || typeof log.response_data.status === 'number') 
+                            ? String(log.response_data.status)
+                            : (log.status === 'error' ? 'Error' : 'OK')
+                          }
                         </TableCell>
                         <TableCell>
                           <Button 
