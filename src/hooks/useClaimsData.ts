@@ -142,12 +142,19 @@ export function useEraRetrieval() {
       if (error instanceof Error) {
         errorMessage = error.message;
         
-        // Look for Claim.MD specific error messages in the error
-        if (error.message.includes("AccountKey") && error.message.includes("required")) {
-          errorMessage = "API Authentication Error: AccountKey parameter required. Please check API key configuration.";
-        } else if (error.message.includes("Invalid") && error.message.includes("AccountKey")) {
-          errorMessage = "API Authentication Error: Invalid AccountKey. Please verify your API key.";
+        // Look for specific error codes in the JSON error response
+        if (typeof error.message === 'string') {
+          if (error.message.includes('"error_code":20') || error.message.includes('AccountKey parameter required')) {
+            errorMessage = "API Authentication Error: AccountKey parameter required. Please check the request format and API key configuration.";
+          } else if (error.message.includes('"error_code":50') || error.message.includes('No service specified')) {
+            errorMessage = "API Error: No service specified. Please verify the endpoint URL format.";
+          } else if (error.message.includes('"error_code":30') || error.message.includes('Invalid') && error.message.includes('AccountKey')) {
+            errorMessage = "API Authentication Error: Invalid AccountKey. Please verify your API key.";
+          }
         }
+        
+        // Add information about request inspection logs
+        errorMessage += " - Complete request details have been logged to the database for inspection.";
       }
       
       toast({

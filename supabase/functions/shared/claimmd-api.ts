@@ -122,6 +122,59 @@ function requiresMultipartFormData(endpointPath: string): boolean {
   return lowerPath === 'upload/' || lowerPath === 'upload';
 }
 
+// Function to create a detailed log of HTTP request for inspection
+async function logCompleteHttpRequest(url: string, method: string, headers: Record<string, string>, body: string | FormData | URLSearchParams): Promise<void> {
+  try {
+    // Format headers for display
+    const headersStr = Object.entries(headers)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n');
+    
+    // Format body based on type
+    let bodyStr = '';
+    if (body instanceof URLSearchParams) {
+      bodyStr = body.toString();
+    } else if (body instanceof FormData) {
+      bodyStr = '[FormData object - contents cannot be fully serialized]';
+    } else {
+      bodyStr = body;
+    }
+    
+    // Create complete request log
+    const requestLog = `
+========== COMPLETE HTTP REQUEST DETAILS ==========
+${method} ${url} HTTP/1.1
+${headersStr}
+
+${bodyStr}
+=================================================
+`;
+    
+    console.log(requestLog);
+    
+    // Also save to api_logs for later inspection
+    await supabase
+      .from('api_logs')
+      .insert({
+        endpoint: 'request_inspector',
+        request_payload: {
+          method,
+          url,
+          headers: headers,
+          body: bodyStr
+        },
+        response_data: null,
+        status: 'debug',
+        error_message: null,
+        client_id: null,
+        processing_time_ms: 0
+      });
+      
+  } catch (err) {
+    console.error('Failed to log complete HTTP request:', err);
+  }
+}
+
 // The main function to call Claim.MD API endpoints
 export async function callClaimMdApi(
   endpoint: string,
@@ -244,6 +297,12 @@ export async function callClaimMdApi(
         // For multipart/form-data, let the browser/runtime set it automatically with boundary
         if (!isMultipartFormData) {
           headers['Content-Type'] = requestContentType;
+        }
+        
+        // Log complete HTTP request details for inspection
+        // This is especially useful for debugging ERA retrieval issues
+        if (endpoint.toLowerCase() === 'eralist' || endpoint.toLowerCase() === 'eradata') {
+          await logCompleteHttpRequest(fullUrl, 'POST', headers, serializedBody);
         }
         
         // DEBUG: Log request details immediately before fetch
