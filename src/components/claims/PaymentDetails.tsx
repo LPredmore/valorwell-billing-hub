@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useEraPaymentData } from "@/hooks/useClaimsData";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,9 +16,10 @@ import { toast } from "@/hooks/use-toast";
 
 interface PaymentDetailsProps {
   appointmentId: string;
+  onClose?: () => void;  // Added onClose as an optional prop
 }
 
-export default function PaymentDetails({ appointmentId }: PaymentDetailsProps) {
+export default function PaymentDetails({ appointmentId, onClose }: PaymentDetailsProps) {
   const { data: payment, isLoading, error } = useEraPaymentData(appointmentId);
   
   if (isLoading) {
@@ -96,10 +96,17 @@ export default function PaymentDetails({ appointmentId }: PaymentDetailsProps) {
   return (
     <Card className="mt-4">
       <CardContent className="p-4">
-        <h3 className="text-lg font-medium flex items-center mb-3">
-          <DollarSign className="h-5 w-5 mr-2" />
-          Payment Information
-        </h3>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-lg font-medium flex items-center">
+            <DollarSign className="h-5 w-5 mr-2" />
+            Payment Information
+          </h3>
+          {onClose && (
+            <Button variant="ghost" size="sm" onClick={onClose} className="h-8 px-2">
+              Close
+            </Button>
+          )}
+        </div>
         
         {payment.denial_details_json && (
           <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-md">
