@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +16,11 @@ import {
   Calendar,
   DollarSign,
   Percent,
-  Info
+  Info,
+  Search,
+  ClipboardList,
+  UserCheck,
+  FileQuestion
 } from "lucide-react";
 import { 
   Collapsible,
@@ -32,6 +35,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const InsuranceVerification = () => {
   const { toast } = useToast();
@@ -97,18 +106,24 @@ const InsuranceVerification = () => {
         const errorMessage = data.userMessage || data.details || data.error;
         setLastError(errorMessage);
         
+        // Show a more informative message based on the response type
+        const statusType = determineResponseType(data);
+        const toastVariant = getToastVariantByResponseType(statusType);
+        
         toast({
-          title: 'Eligibility Check Error',
-          description: errorMessage,
-          variant: 'destructive',
+          title: 'Eligibility Information Received',
+          description: getResponseSummary(data),
+          variant: toastVariant,
         });
         return;
       }
       
+      const statusType = determineResponseType(data);
+      
       toast({
         title: 'Eligibility Check Complete',
         description: `Status: ${data.eligibility.status}`,
-        variant: data.eligibility.status === 'Active' ? 'default' : 'destructive',
+        variant: getToastVariantByResponseType(statusType),
       });
       
       // Refresh the client data
@@ -133,39 +148,159 @@ const InsuranceVerification = () => {
     return new Date(dateString).toLocaleString();
   };
 
+  // Determine response type - expanded from just Active/Error
+  const determineResponseType = (data: any): 'active' | 'not-found' | 'inactive' | 'info-needed' | 'error' | 'unknown' => {
+    if (!data) return 'unknown';
+    
+    // Check for ClaimMD API error codes that indicate specific situations
+    if (data.error?.error_code === '75') return 'not-found';
+    if (data.error?.error_code === '70') return 'inactive';
+    if (data.error?.error_code === '60' || data.error?.error_code === '65') return 'info-needed';
+    if (data.error) return 'error';
+    
+    // For eligibility "status" in the response
+    const status = data.eligibility?.status?.toLowerCase();
+    if (status === 'active') return 'active';
+    if (status === 'inactive') return 'inactive';
+    
+    return 'unknown';
+  }
+
+  // Get a user-friendly summary of the response
+  const getResponseSummary = (data: any): string => {
+    const responseType = determineResponseType(data);
+    
+    switch (responseType) {
+      case 'active':
+        return 'Coverage is active';
+      case 'not-found':
+        return 'Member not found in insurance database - verify information';
+      case 'inactive':
+        return 'Coverage is not active';
+      case 'info-needed':
+        return 'Missing or invalid information';
+      case 'error':
+        return data.error?.error_mesg || 'Error retrieving coverage details';
+      default:
+        return 'Unable to determine coverage status';
+    }
+  };
+
+  // Get toast variant based on response type
+  const getToastVariantByResponseType = (responseType: string): 'default' | 'destructive' => {
+    switch (responseType) {
+      case 'active': return 'default';
+      case 'error': return 'destructive';
+      default: return 'default'; // Non-active but valid responses aren't "destructive"
+    }
+  };
+
   // Helper function to determine status color
-  const getStatusColor = (status: string | null) => {
+  const getStatusColor = (status: string | null, responseType?: string) => {
+    if (responseType) {
+      switch(responseType) {
+        case 'active':
+          return 'text-green-600';
+        case 'not-found':
+        case 'info-needed':
+          return 'text-amber-600';
+        case 'inactive':
+          return 'text-orange-500';
+        case 'error':
+          return 'text-red-600';
+        default:
+          return 'text-gray-500';
+      }
+    }
+    
     if (!status) return 'text-gray-500';
     
     switch(status.toLowerCase()) {
       case 'active':
         return 'text-green-600';
       case 'inactive':
+        return 'text-orange-500';
       case 'error':
         return 'text-red-600';
-      case 'pending':
+      case 'not found':
+      case 'info needed':
         return 'text-amber-600';
       default:
         return 'text-yellow-600';
     }
   };
 
-  // Get status icon based on eligibility status
-  const getStatusIcon = (status: string | null) => {
+  // Get badge variant based on status
+  const getBadgeVariant = (status: string | null): "default" | "secondary" | "destructive" | "outline" => {
+    if (!status) return 'outline';
+    
+    switch(status.toLowerCase()) {
+      case 'active':
+        return 'default';
+      case 'error':
+        return 'destructive';
+      case 'inactive':
+      case 'not found':
+        return 'secondary';
+      default:
+        return 'outline';
+    }
+  };
+
+  // Get status icon based on eligibility status or response type
+  const getStatusIcon = (status: string | null, responseType?: string) => {
+    if (responseType) {
+      switch(responseType) {
+        case 'active':
+          return <CheckCircle2 className="h-5 w-5 text-green-600" />;
+        case 'not-found':
+          return <Search className="h-5 w-5 text-amber-600" />;
+        case 'info-needed':
+          return <FileQuestion className="h-5 w-5 text-amber-600" />;
+        case 'inactive':
+          return <UserCheck className="h-5 w-5 text-orange-500" />;
+        case 'error':
+          return <AlertCircle className="h-5 w-5 text-red-600" />;
+        default:
+          return <HelpCircle className="h-5 w-5 text-gray-400" />;
+      }
+    }
+    
     if (!status) return <HelpCircle className="h-5 w-5 text-gray-400" />;
     
     switch(status.toLowerCase()) {
       case 'active':
         return <CheckCircle2 className="h-5 w-5 text-green-600" />;
       case 'inactive':
-        return <AlertCircle className="h-5 w-5 text-red-600" />;
+        return <UserCheck className="h-5 w-5 text-orange-500" />;
       case 'error':
-        return <AlertTriangle className="h-5 w-5 text-red-600" />;
+        return <AlertCircle className="h-5 w-5 text-red-600" />;
       case 'pending':
         return <Loader2 className="h-5 w-5 text-amber-600" />;
+      case 'not found':
+        return <Search className="h-5 w-5 text-amber-600" />;
       default:
         return <HelpCircle className="h-5 w-5 text-yellow-600" />;
     }
+  };
+
+  // Display status text in a user-friendly way
+  const getDisplayStatus = (status: string | null): string => {
+    if (!status) return 'Unknown';
+    
+    // Convert 'Error' status to more specific descriptions based on error code
+    if (status.toLowerCase() === 'error') {
+      const client = clients?.find(c => c.eligibility_status_primary?.toLowerCase() === 'error');
+      if (client) {
+        const errorCode = client?.eligibility_response_details_primary_json?.error?.error_code;
+        if (errorCode === '75') return 'Not Found';
+        if (errorCode === '70') return 'Inactive';
+        if (errorCode === '60' || errorCode === '65') return 'Info Needed';
+      }
+      return 'Error';
+    }
+    
+    return status;
   };
 
   // Check if client has all required insurance info for eligibility check
@@ -226,13 +361,13 @@ const InsuranceVerification = () => {
     if (client?.eligibility_response_details_primary_json?.error?.error_code) {
       const errorCode = client.eligibility_response_details_primary_json.error.error_code;
       switch(errorCode) {
-        case '75': return 'Subscriber not found';
-        case '67': return 'Patient not found';
-        case '70': return 'Insurance not active';
+        case '75': return 'Subscriber not found - verify name, DOB and policy number';
+        case '67': return 'Patient not found - verify patient details';
+        case '70': return 'Insurance not active - verify effective dates';
         case '20': return 'API authentication error';
         case '50': return 'Invalid service requested';
-        case '60': return 'Missing required information';
-        case '65': return 'Invalid insurance information';
+        case '60': return 'Missing required information - check all fields';
+        case '65': return 'Invalid insurance information - verify all details';
         case '80': return 'Network error or timeout';
         default: return `Error code: ${errorCode}`;
       }
@@ -242,10 +377,10 @@ const InsuranceVerification = () => {
     if (client?.eligibility_response_details_primary_json?.error?.error_mesg) {
       const errorMessage = client.eligibility_response_details_primary_json.error.error_mesg.toLowerCase();
       
-      if (errorMessage.includes('not found')) return 'Member not found';
-      if (errorMessage.includes('invalid')) return 'Invalid information provided';
-      if (errorMessage.includes('inactive')) return 'Coverage inactive';
-      if (errorMessage.includes('missing')) return 'Missing required information';
+      if (errorMessage.includes('not found')) return 'Member not found - verify name, DOB and policy number';
+      if (errorMessage.includes('invalid')) return 'Invalid information provided - check all fields';
+      if (errorMessage.includes('inactive')) return 'Coverage inactive - verify effective dates';
+      if (errorMessage.includes('missing')) return 'Missing required information - check all fields';
       
       return client.eligibility_response_details_primary_json.error.error_mesg;
     }
@@ -255,6 +390,24 @@ const InsuranceVerification = () => {
 
   // Get coverage period if available
   const getCoveragePeriod = (client: any) => {
+    // First check if we have plan_date in the eligibility response
+    if (client?.eligibility_response_details_primary_json?.elig?.plan_date) {
+      const planDate = client.eligibility_response_details_primary_json.elig.plan_date;
+      if (planDate.includes('-')) {
+        const [start, end] = planDate.split('-');
+        return {
+          startDate: formatApiDate(start),
+          endDate: formatApiDate(end),
+        };
+      } else {
+        return {
+          startDate: null,
+          endDate: null,
+        };
+      }
+    }
+    
+    // Otherwise check in the benefits array
     if (client?.eligibility_response_details_primary_json?.elig?.benefit) {
       const benefits = client.eligibility_response_details_primary_json.elig.benefit;
       
@@ -274,6 +427,33 @@ const InsuranceVerification = () => {
     }
     
     return null;
+  };
+
+  // Format the API date (assumes YYYYMMDD format)
+  const formatApiDate = (dateStr: string | null): string | null => {
+    if (!dateStr) return null;
+    // Handle YYYYMMDD format
+    if (dateStr.length === 8) {
+      const year = dateStr.substring(0, 4);
+      const month = dateStr.substring(4, 6);
+      const day = dateStr.substring(6, 8);
+      return `${year}-${month}-${day}`;
+    }
+    return dateStr;
+  };
+
+  // Get demographic info returned in the eligibility response
+  const getDemographicInfo = (client: any) => {
+    const elig = client?.eligibility_response_details_primary_json?.elig;
+    if (!elig) return null;
+    
+    return {
+      firstName: elig.ins_name_f,
+      lastName: elig.ins_name_l,
+      dob: elig.ins_dob ? formatApiDate(elig.ins_dob) : null,
+      gender: elig.ins_sex,
+      policyNumber: elig.ins_number || elig.ins_id,
+    };
   };
 
   // Get plan name from response data
@@ -366,6 +546,69 @@ const InsuranceVerification = () => {
     
     return deductibleInfo;
   };
+  
+  // Get response type for a client
+  const getClientResponseType = (client: any) => {
+    if (!client?.eligibility_response_details_primary_json) return 'unknown';
+    
+    // Check for specific error codes that indicate status rather than errors
+    if (client.eligibility_status_primary === 'Error') {
+      const errorCode = client.eligibility_response_details_primary_json?.error?.error_code;
+      if (errorCode === '75') return 'not-found';
+      if (errorCode === '70') return 'inactive';
+      if (errorCode === '60' || errorCode === '65') return 'info-needed';
+      return 'error';
+    }
+    
+    if (client.eligibility_status_primary === 'Active') return 'active';
+    if (client.eligibility_status_primary === 'Inactive') return 'inactive';
+    
+    return 'unknown';
+  };
+
+  // Get verification information for display
+  const getVerificationInfo = (client: any) => {
+    const responseType = getClientResponseType(client);
+    const demoInfo = getDemographicInfo(client);
+    
+    // Active status shows regular benefits 
+    if (responseType === 'active') {
+      return null;
+    }
+    
+    // For not-found, show the request data vs what was found
+    if (responseType === 'not-found') {
+      const requestData = getLastRequestData(client);
+      if (!requestData) return null;
+      
+      return {
+        type: 'not-found',
+        requested: {
+          name: requestData.subscriberName,
+          policy: requestData.policyNumber,
+        },
+        returned: demoInfo ? {
+          name: demoInfo.firstName && demoInfo.lastName ? 
+            `${demoInfo.firstName} ${demoInfo.lastName}` : 'No name returned',
+          policy: demoInfo.policyNumber || 'No policy returned',
+        } : null
+      };
+    }
+    
+    // For inactive, show coverage period if available
+    if (responseType === 'inactive') {
+      const coveragePeriod = getCoveragePeriod(client);
+      
+      return {
+        type: 'inactive',
+        coverage: coveragePeriod,
+        name: demoInfo?.firstName && demoInfo?.lastName ? 
+          `${demoInfo.firstName} ${demoInfo.lastName}` : null
+      };
+    }
+    
+    return null;
+  };
 
   return (
     <div className="p-6">
@@ -406,7 +649,8 @@ const InsuranceVerification = () => {
             const errorDetails = getErrorDetails(client);
             const detailedErrorReason = client.eligibility_status_primary === 'Error' ? getDetailedErrorReason(client) : null;
             const canCheckEligibility = hasRequiredInformation(client);
-            const statusIcon = getStatusIcon(client.eligibility_status_primary);
+            const responseType = getClientResponseType(client);
+            const statusIcon = getStatusIcon(client.eligibility_status_primary, responseType);
             const lastRequestData = getLastRequestData(client);
             const coveragePeriod = getCoveragePeriod(client);
             const planName = getPlanName(client);
@@ -414,19 +658,27 @@ const InsuranceVerification = () => {
             const additionalBenefits = client.eligibility_status_primary === 'Active' ? getAdditionalBenefits(client) : null;
             const deductibleInfo = client.eligibility_status_primary === 'Active' ? getDeductibleInfo(client) : null;
             const isExpanded = expandedDetails === client.id;
+            const displayStatus = getDisplayStatus(client.eligibility_status_primary);
+            const verificationInfo = getVerificationInfo(client);
+            const demographicInfo = getDemographicInfo(client);
             
             return (
               <Card key={client.id} className={selectedClientId === client.id ? "border-primary" : ""}>
-                <CardHeader>
-                  <CardTitle>{client.client_first_name} {client.client_last_name}</CardTitle>
-                  <CardDescription className="flex items-center justify-between">
-                    <span>{client.client_insurance_company_primary || 'No insurance on file'}</span>
-                    {client.eligibility_status_primary && (
-                      <Badge variant={client.eligibility_status_primary.toLowerCase() === 'active' ? 'default' : 'outline'}>
-                        {client.eligibility_status_primary}
-                      </Badge>
-                    )}
-                  </CardDescription>
+                <CardHeader className="flex flex-row justify-between items-start space-y-0 pb-2">
+                  <div>
+                    <CardTitle>{client.client_first_name} {client.client_last_name}</CardTitle>
+                    <CardDescription className="mt-1">
+                      {client.client_insurance_company_primary || 'No insurance on file'}
+                    </CardDescription>
+                  </div>
+                  {client.eligibility_status_primary && (
+                    <Badge 
+                      variant={getBadgeVariant(displayStatus)}
+                      className="ml-2 text-xs"
+                    >
+                      {displayStatus}
+                    </Badge>
+                  )}
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
@@ -437,23 +689,86 @@ const InsuranceVerification = () => {
                       </div>
                     )}
                     
-                    {/* Show detailed error information */}
-                    {detailedErrorReason && (
+                    {responseType === 'not-found' && (
+                      <Alert variant="default" className="bg-amber-50 text-amber-800 border-amber-200 mb-2">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle className="text-amber-800">Subscriber Not Found</AlertTitle>
+                        <AlertDescription className="text-sm text-amber-700">
+                          The insurance company could not find this member. Verify the policy number, 
+                          name spelling, and date of birth.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {responseType === 'inactive' && (
+                      <Alert variant="default" className="bg-orange-50 text-orange-800 border-orange-200 mb-2">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle className="text-orange-800">Coverage Not Active</AlertTitle>
+                        <AlertDescription className="text-sm text-orange-700">
+                          {verificationInfo?.coverage ? 
+                            `Coverage dates: ${verificationInfo.coverage.startDate || 'Unknown'} to ${verificationInfo.coverage.endDate || 'Unknown'}` : 
+                            'The policy is not currently active. Verify effective dates.'}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {responseType === 'info-needed' && (
+                      <Alert variant="default" className="bg-amber-50 text-amber-800 border-amber-200 mb-2">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle className="text-amber-800">Additional Information Needed</AlertTitle>
+                        <AlertDescription className="text-sm text-amber-700">
+                          {detailedErrorReason || 'Missing or invalid information was provided. Please verify all insurance details.'}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {responseType === 'error' && detailedErrorReason && (
                       <div className="flex items-start space-x-2 text-red-600 text-sm mb-2 bg-red-50 p-2 rounded">
                         <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                         <div>
-                          <span className="font-medium">Reason:</span> {detailedErrorReason}
-                          {errorDetails && <div className="mt-1 text-xs opacity-80">{errorDetails}</div>}
+                          <span className="font-medium">Error:</span> {detailedErrorReason}
+                          {errorDetails && <div className="mt-1 text-xs opacity-80">{errorDetails.error_mesg}</div>}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Information returned from API - always show, even for "errors" */}
+                    {demographicInfo && (
+                      <div className="mt-2 pt-2 border-t border-gray-100">
+                        <div className="text-sm font-medium text-gray-700 mb-1">Information from Insurance:</div>
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-sm">
+                          {demographicInfo.firstName && demographicInfo.lastName && (
+                            <>
+                              <span className="text-gray-500">Name:</span>
+                              <span>
+                                {demographicInfo.firstName} {demographicInfo.lastName}
+                              </span>
+                            </>
+                          )}
+                          
+                          {demographicInfo.policyNumber && (
+                            <>
+                              <span className="text-gray-500">Policy:</span>
+                              <span>{demographicInfo.policyNumber}</span>
+                            </>
+                          )}
+                          
+                          {demographicInfo.dob && (
+                            <>
+                              <span className="text-gray-500">DOB:</span>
+                              <span>{new Date(demographicInfo.dob).toLocaleDateString()}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                     )}
 
                     <div className="flex justify-between items-center">
                       <span className="font-medium">Status:</span>
-                      <div className={`flex items-center ${getStatusColor(client.eligibility_status_primary)}`}>
+                      <div className={`flex items-center ${getStatusColor(client.eligibility_status_primary, responseType)}`}>
                         {statusIcon}
                         <span className="ml-1">
-                          {client.eligibility_status_primary || 'Unknown'}
+                          {displayStatus || 'Unknown'}
                         </span>
                       </div>
                     </div>
@@ -592,7 +907,53 @@ const InsuranceVerification = () => {
                       </>
                     )}
 
-                    {client.eligibility_status_primary === 'Error' && lastRequestData && (
+                    {/* For non-active responses, show what was requested vs what was found */}
+                    {(responseType === 'not-found' || responseType === 'info-needed') && lastRequestData && (
+                      <div className="mt-2 pt-2 border-t border-gray-100">
+                        <div className="font-medium mb-1 text-sm">Submitted Information:</div>
+                        <div className="grid grid-cols-2 gap-1 text-sm">
+                          <span className="text-gray-500">Policy Number:</span>
+                          <span className="font-mono">{lastRequestData.policyNumber}</span>
+                          
+                          <span className="text-gray-500">Name:</span>
+                          <span>{lastRequestData.subscriberName}</span>
+                          
+                          <span className="text-gray-500">Relationship:</span>
+                          <span>{lastRequestData.relationship}</span>
+                          
+                          {lastRequestData.payerId && (
+                            <>
+                              <span className="text-gray-500">Payer ID:</span>
+                              <span className="font-mono">{lastRequestData.payerId}</span>
+                            </>
+                          )}
+                        </div>
+                        
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="mt-2 text-xs text-blue-600 flex items-center cursor-help">
+                                <Info className="h-3 w-3 mr-1" />
+                                <span>Tips for resolving</span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                              <p className="text-xs">
+                                For "Not Found" responses, verify:
+                                <br />• Exact spelling of name
+                                <br />• Correct DOB format
+                                <br />• Policy number (including all hyphens or prefixes)
+                                <br />• Relationship to subscriber
+                                <br />• Insurance company selected
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                    )}
+
+                    {/* Show request data for errors */}
+                    {responseType === 'error' && lastRequestData && (
                       <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-500">
                         <div className="font-medium mb-1">Last request data:</div>
                         <div className="grid grid-cols-2 gap-1">
