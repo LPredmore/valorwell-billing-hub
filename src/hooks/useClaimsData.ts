@@ -1,3 +1,4 @@
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { claimsService } from "@/services/claimsService";
 import { toast } from "@/hooks/use-toast";
@@ -167,10 +168,18 @@ export function useEraRetrieval() {
       queryClient.invalidateQueries({ queryKey: ['billableAppointments'] });
       queryClient.invalidateQueries({ queryKey: ['eraList'] });
       queryClient.invalidateQueries({ queryKey: ['unreconciledPayments'] });
-      queryClient.invalidateQueries({ queryKey: ['apiLogs'] }); // Invalidate API logs after ERA retrieval
+      queryClient.invalidateQueries({ queryKey: ['apiLogs'] }); 
+      
+      // Format message based on the number of processed ERAs
+      let description = "No new ERA files to process";
+      
+      if (data.processedCount > 0) {
+        description = `Processed ${data.processedCount} ERA files with ${data.paymentCount} payments`;
+      }
+      
       toast({
         title: "ERA files retrieved",
-        description: `Processed ${data.processedCount} ERA files with ${data.paymentCount} payments`,
+        description,
       });
     },
     onError: (error) => {
@@ -182,27 +191,19 @@ export function useEraRetrieval() {
         // Extract more meaningful error messages
         errorMessage = error.message;
         
-        // Look for specific API error patterns in the response
+        // Handle specific error patterns
         if (typeof error.message === 'string') {
-          // Handle date format errors
           if (error.message.includes('date') && error.message.includes('format')) {
             errorMessage = "Date format error: Please ensure dates are formatted correctly (MM-DD-YYYY)";
           }
-          // Handle parameter name errors
           else if (error.message.includes('parameter') || error.message.includes('Parameter')) {
             errorMessage = "Parameter error: Please verify the correct parameter names are being used";
           }
-          // Handle authentication errors
           else if (error.message.includes('AccountKey') || error.message.includes('Authentication')) {
             errorMessage = "Authentication error: Please verify your API key";
           }
-          // Handle endpoint not found errors
           else if (error.message.includes('not found') || error.message.includes('404')) {
             errorMessage = "Endpoint error: Please verify the API endpoint URL";
-          }
-          // Handle service errors
-          else if (error.message.includes('service') || error.message.includes('Service')) {
-            errorMessage = "Service error: The requested service may not be available";
           }
         }
         
@@ -234,6 +235,17 @@ export function useEraList() {
 }
 
 /**
+ * Hook to fetch detailed information for a specific ERA
+ */
+export function useEraDetail(eraId: string) {
+  return useQuery({
+    queryKey: ['eraDetail', eraId],
+    queryFn: () => claimsService.getEraDetail(eraId),
+    enabled: !!eraId,
+  });
+}
+
+/**
  * Hook to fetch payments requiring reconciliation
  */
 export function useUnreconciledPayments() {
@@ -261,6 +273,7 @@ export function useReconcilePayment() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['unreconciledPayments'] });
       queryClient.invalidateQueries({ queryKey: ['billableAppointments'] });
+      queryClient.invalidateQueries({ queryKey: ['eraDetail'] });
       toast({
         title: "Payment reconciled",
         description: "The payment has been successfully reconciled.",

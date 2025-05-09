@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -134,7 +135,8 @@ export const claimsService = {
           era_payment_date,
           era_check_eft_number,
           era_claimmd_id,
-          denial_details_json
+          denial_details_json,
+          claim_status
         `)
         .eq('id', appointmentId)
         .single();
@@ -322,6 +324,66 @@ export const claimsService = {
       return data || [];
     } catch (error) {
       console.error("Failed to fetch API logs:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Gets detailed information for a specific ERA by ID
+   */
+  async getEraDetail(eraId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          id,
+          era_claimmd_id,
+          era_payment_date,
+          era_check_eft_number,
+          insurance_paid_amount,
+          insurance_adjustment_amount,
+          patient_responsibility_amount,
+          claim_status,
+          cpt_code,
+          billed_amount,
+          client_id,
+          clinician_id,
+          clients (
+            client_first_name,
+            client_last_name
+          ),
+          clinicians (
+            clinician_first_name,
+            clinician_last_name
+          )
+        `)
+        .eq('era_claimmd_id', eraId);
+
+      if (error) {
+        console.error(`Error fetching ERA detail for ID ${eraId}:`, error);
+        throw error;
+      }
+      
+      // Process the data to add formatted names
+      const processedData = data?.map(appointment => {
+        const clientName = appointment.clients 
+          ? `${appointment.clients.client_first_name || ''} ${appointment.clients.client_last_name || ''}`.trim()
+          : 'Unknown';
+          
+        const clinicianName = appointment.clinicians
+          ? `${appointment.clinicians.clinician_first_name || ''} ${appointment.clinicians.clinician_last_name || ''}`.trim()
+          : 'Unknown';
+          
+        return {
+          ...appointment,
+          client_name: clientName,
+          clinician_name: clinicianName
+        };
+      });
+
+      return processedData || [];
+    } catch (error) {
+      console.error(`Failed to fetch ERA detail for ID ${eraId}:`, error);
       throw error;
     }
   }
