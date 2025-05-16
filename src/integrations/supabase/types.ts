@@ -268,6 +268,45 @@ export type Database = {
           },
         ]
       }
+      availability_exceptions: {
+        Row: {
+          clinician_id: string
+          created_at: string | null
+          day_of_week: string | null
+          end_time: string
+          id: string
+          is_active: boolean | null
+          is_deleted: boolean | null
+          specific_date: string
+          start_time: string
+          updated_at: string | null
+        }
+        Insert: {
+          clinician_id: string
+          created_at?: string | null
+          day_of_week?: string | null
+          end_time: string
+          id?: string
+          is_active?: boolean | null
+          is_deleted?: boolean | null
+          specific_date: string
+          start_time: string
+          updated_at?: string | null
+        }
+        Update: {
+          clinician_id?: string
+          created_at?: string | null
+          day_of_week?: string | null
+          end_time?: string
+          id?: string
+          is_active?: boolean | null
+          is_deleted?: boolean | null
+          specific_date?: string
+          start_time?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       client_history: {
         Row: {
           additional_info: string | null

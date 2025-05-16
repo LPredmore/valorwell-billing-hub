@@ -1,3 +1,4 @@
+
 // Utility functions for formatting data according to Claim.MD's API requirements
 
 /**
@@ -103,7 +104,7 @@ export function formatEligibilityPayload(
     ins_dob: formatClaimMdDate(isSelf ? clientData.client_date_of_birth : clientData.client_subscriber_dob_primary) || '',
     ins_sex: formatGender(clientData.client_gender),
     
-    // Payer information
+    // Payer information - Using payerid instead of payer_id for consistency with claims
     payerid: clientData.client_primary_payer_id || '',
     ins_name: clientData.client_insurance_company_primary || '',
     
