@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -122,7 +121,7 @@ export default function ClaimDetail({
       <Tabs defaultValue="billing">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="billing">Billing Details</TabsTrigger>
-          <TabsTrigger value="claim" disabled={!claimHistory?.claim_claimmd_id}>
+          <TabsTrigger value="claim" disabled={!claimHistory?.claimid}>
             Claim Status
           </TabsTrigger>
         </TabsList>
@@ -240,7 +239,7 @@ export default function ClaimDetail({
                 <div className="space-y-3 text-sm">
                   <div className="grid grid-cols-2 gap-2">
                     <div className="font-medium">Claim ID:</div>
-                    <div>{claimHistory.claim_claimmd_id || 'N/A'}</div>
+                    <div>{claimHistory.claimid || 'N/A'}</div>
                     
                     <div className="font-medium">Batch ID:</div>
                     <div>{claimHistory.claim_claimmd_batch_id || 'N/A'}</div>

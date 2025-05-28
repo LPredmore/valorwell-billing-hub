@@ -83,7 +83,7 @@ export const claimsService = {
     try {
       const { data, error } = await supabase
         .from('appointments')
-        .select('claim_status, claim_last_submission_date, claim_response_json, claim_claimmd_id, claim_claimmd_batch_id')
+        .select('claim_status, claim_last_submission_date, claim_response_json, claimid, claim_claimmd_batch_id')
         .eq('id', appointmentId)
         .single();
 
