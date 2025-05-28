@@ -62,6 +62,10 @@ export default function SubmittedClaimsQueue({
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // DEBUGGING: Log the raw appointments data to understand what we're receiving
+  console.log('SubmittedClaimsQueue received appointments:', appointments);
+  console.log('Number of appointments:', appointments?.length || 0);
+
   const getStatusBadge = (status: string) => {
     switch (status?.toLowerCase()) {
       case "paid":
@@ -93,6 +97,9 @@ export default function SubmittedClaimsQueue({
     
     return matchesSearch && matchesStatus;
   }) || [];
+
+  // DEBUGGING: Log the filtered results
+  console.log('Filtered appointments:', filteredAppointments);
 
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -170,10 +177,25 @@ export default function SubmittedClaimsQueue({
             ) : displayedAppointments.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="h-24 text-center">
-                  {filteredAppointments.length === 0 && searchQuery ? 
-                    "No submitted claims match your search" : 
-                    "No submitted claims found"
-                  }
+                  <div className="space-y-2">
+                    <div>
+                      {filteredAppointments.length === 0 && searchQuery ? 
+                        "No submitted claims match your search" : 
+                        "No submitted claims found"
+                      }
+                    </div>
+                    {/* DEBUGGING: Show raw data info */}
+                    {!isLoading && appointments && (
+                      <div className="text-xs text-muted-foreground">
+                        Raw data: {appointments.length} total appointments received
+                        {appointments.length > 0 && (
+                          <div className="mt-1">
+                            Sample: {JSON.stringify(appointments[0], null, 2).substring(0, 200)}...
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
@@ -252,6 +274,12 @@ export default function SubmittedClaimsQueue({
       <div className="text-sm text-muted-foreground">
         {filteredAppointments.length} submitted claim{filteredAppointments.length !== 1 ? 's' : ''} found
         {searchQuery && ` (filtered from ${appointments?.length || 0} total)`}
+        {/* DEBUGGING: Show additional info */}
+        {!isLoading && (
+          <div className="mt-1 text-xs">
+            Debug: Raw appointments={appointments?.length || 0}, Filtered={filteredAppointments.length}, Displayed={displayedAppointments.length}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -108,19 +108,12 @@ Deno.serve(async (req: Request) => {
       // CRITICAL: Log the specific fields we need to debug
       console.log(`  CRITICAL - Patient State: ${claim.pat_state || 'MISSING'}`);
       console.log(`  CRITICAL - Insured State: ${claim.ins_state || 'MISSING'}`);
-      console.log(`  CRITICAL - Payer ID: ${claim.payerid || 'MISSING'}`); // Changed from payer_id to payerid
+      console.log(`  CRITICAL - Payer ID: ${claim.payerid || 'MISSING'}`);
       console.log(`  CRITICAL - Tax ID: ${claim.bill_taxid || 'MISSING'}`);
       console.log(`  CRITICAL - Tax ID Type: ${claim.bill_taxid_type || 'MISSING'}`);
       
       console.log(`  Provider City: ${claim.bill_city}`);
       console.log(`  Provider State: ${claim.bill_state || 'MISSING'}`);
-      
-      // Check specifically for payer_id field (old name)
-      if ('payer_id' in claim) {
-        console.log(`  WARNING: payer_id field is still present with value: ${claim.payer_id}`);
-      } else {
-        console.log(`  VERIFIED: payer_id field has been successfully replaced with payerid`);
-      }
     });
     
     // Log the final JSON string for verification
@@ -184,8 +177,8 @@ Deno.serve(async (req: Request) => {
       );
     }
     
-    // Extract claim IDs from the response if present
-    const claimIds = claimProcessingResult.map(claim => claim.claimmd_id || claim.claim_id || '');
+    // FIXED: Extract claim IDs correctly - only use claimid field
+    const claimIds = claimProcessingResult.map(claim => claim.claimid || '');
     
     // Update each appointment with claim submission details
     const updateResults = [];
@@ -194,10 +187,11 @@ Deno.serve(async (req: Request) => {
       const appointment = claimData[i].appointment;
       const claimId = claimIds[i] || batchId ? `${batchId}-${i+1}` : `pending-${appointment.id}`;
       
+      // FIXED: Update the correct field name 'claimid' instead of 'claim_claimmd_id'
       const { data, error } = await supabase
         .from('appointments')
         .update({
-          claim_claimmd_id: claimId,
+          claimid: claimId,
           claim_claimmd_batch_id: batchId || null,
           claim_status: 'Submitted to Clearinghouse',
           claim_last_submission_date: new Date().toISOString(),

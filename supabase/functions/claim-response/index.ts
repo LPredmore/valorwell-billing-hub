@@ -29,16 +29,16 @@ async function getLastResponseId(): Promise<number> {
       .single();
     
     if (error || !data) {
-      console.log('No last response ID found, starting with a reasonable default');
-      return 1590000000; // Start with a lower ResponseID to capture more responses
+      console.log('No last response ID found, starting with default of 0');
+      return 0; // FIXED: Start with 0 to capture all historical responses
     }
     
-    const responseId = parseInt(data.value, 10) || 1590000000;
+    const responseId = parseInt(data.value, 10) || 0;
     console.log(`Retrieved last response ID from settings: ${responseId}`);
     return responseId;
   } catch (err) {
     console.error('Error retrieving last response ID:', err);
-    return 1590000000; // Default to lower ResponseID
+    return 0; // FIXED: Default to 0 instead of high number
   }
 }
 
@@ -153,7 +153,7 @@ async function updateAppointmentClaimStatus(claimId: string, status: string, res
   try {
     console.log(`Updating claim status for claimId: ${claimId}, status: ${status}`);
     
-    // Fixed: Query the correct field name 'claimid' instead of 'claim_claimmd_id'
+    // Query the correct field name 'claimid'
     const { data: appointments, error: queryError } = await supabase
       .from('appointments')
       .select('id')
@@ -245,7 +245,7 @@ async function processResponseData(responseData: any, lastSuccessfulCheck: strin
   }
   
   for (const claim of claims) {
-    // Fixed: Only use claimid, remove claimmd_id reference
+    // FIXED: Only use claimid field
     if (!claim.claimid) {
       console.log('Skipping claim without claimid:', claim);
       continue;
