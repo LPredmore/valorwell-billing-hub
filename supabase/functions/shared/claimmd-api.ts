@@ -1,3 +1,4 @@
+
 // Shared utility for interacting with the Claim.MD API
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
@@ -214,6 +215,7 @@ const endpointMap: Record<string, string> = {
   'era/data': 'eradata/',
   'era835': 'era835/',
   'era/835': 'era835/',
+  'response': 'response/',
   // Add other endpoints as needed
 };
 
@@ -229,7 +231,7 @@ function resolveEndpoint(endpoint: string): string {
   return endpoint.endsWith('/') ? endpoint : `${endpoint}/`;
 }
 
-// Determine if an endpoint should use URL-encoded form data - updated with corrected endpoint names
+// Determine if an endpoint should use URL-encoded form data - FIXED to include response endpoint
 function requiresUrlEncodedData(endpointPath: string): boolean {
   const lowerPath = endpointPath.toLowerCase();
   return lowerPath.includes('elig') || 
@@ -242,7 +244,9 @@ function requiresUrlEncodedData(endpointPath: string): boolean {
          lowerPath === 'eradata/' || 
          lowerPath === 'era835' ||
          lowerPath === 'era/835' ||
-         lowerPath === 'era835/';
+         lowerPath === 'era835/' ||
+         lowerPath === 'response' ||
+         lowerPath === 'response/';
 }
 
 // Determine if an endpoint should use multipart form data
@@ -292,7 +296,7 @@ export async function callClaimMdApi(
     let serializedBody: string | FormData | URLSearchParams;
     
     if (isUrlEncodedData) {
-      // For eligibility and ERA endpoints, use application/x-www-form-urlencoded
+      // For eligibility, ERA, and response endpoints, use application/x-www-form-urlencoded
       requestContentType = 'application/x-www-form-urlencoded';
       
       // IMPORTANT: Create URLSearchParams with AccountKey as the first parameter
