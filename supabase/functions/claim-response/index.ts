@@ -153,12 +153,18 @@ async function updateAppointmentClaimStatus(claimId: string, status: string, res
   try {
     console.log(`Updating claim status for claimId: ${claimId}, status: ${status}`);
     
+    // Fixed: Query the correct field name 'claimid' instead of 'claim_claimmd_id'
     const { data: appointments, error: queryError } = await supabase
       .from('appointments')
       .select('id')
-      .eq('claim_claimmd_id', claimId);
+      .eq('claimid', claimId);
     
-    if (queryError || !appointments.length) {
+    if (queryError) {
+      console.error(`Error querying appointments for claim ID ${claimId}:`, queryError);
+      return;
+    }
+    
+    if (!appointments || appointments.length === 0) {
       console.log(`No appointment found with claim ID ${claimId}`);
       return;
     }
@@ -239,12 +245,13 @@ async function processResponseData(responseData: any, lastSuccessfulCheck: strin
   }
   
   for (const claim of claims) {
-    if (!claim.claimid && !claim.claimmd_id) {
-      console.log('Skipping claim without ID:', claim);
+    // Fixed: Only use claimid, remove claimmd_id reference
+    if (!claim.claimid) {
+      console.log('Skipping claim without claimid:', claim);
       continue;
     }
     
-    const claimId = claim.claimid || claim.claimmd_id;
+    const claimId = claim.claimid;
     console.log(`Processing claim: ${claimId}`);
     
     // Extract status from the claim response

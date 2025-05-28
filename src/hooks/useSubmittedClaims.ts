@@ -6,6 +6,7 @@ export function useSubmittedClaims() {
   return useQuery({
     queryKey: ['submittedClaims'],
     queryFn: async () => {
+      // Fixed: Query the correct field name 'claimid' instead of 'claim_claimmd_id'
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -14,7 +15,7 @@ export function useSubmittedClaims() {
           cpt_code,
           billed_amount,
           claim_status,
-          claim_claimmd_id,
+          claimid,
           claim_last_submission_date,
           insurance_paid_amount,
           patient_responsibility_amount,
@@ -30,7 +31,7 @@ export function useSubmittedClaims() {
             clinician_last_name
           )
         `)
-        .not('claim_claimmd_id', 'is', null)
+        .not('claimid', 'is', null)
         .order('claim_last_submission_date', { ascending: false });
 
       if (error) {
@@ -46,7 +47,7 @@ export function useSubmittedClaims() {
         return {
           id: appt.id,
           start_at: appt.start_at,
-          claim_claimmd_id: appt.claim_claimmd_id,
+          claim_claimmd_id: appt.claimid, // Map claimid to expected property name for UI compatibility
           insurance_paid_amount: appt.insurance_paid_amount,
           patient_responsibility_amount: appt.patient_responsibility_amount,
           client: {

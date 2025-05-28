@@ -140,11 +140,11 @@ export type Database = {
           buffer_after: number | null
           buffer_before: number | null
           claim_claimmd_batch_id: string | null
-          claim_claimmd_id: string | null
           claim_last_submission_date: string | null
           claim_response_json: Json | null
           claim_status: string | null
           claim_status_last_checked: string | null
+          claimid: string | null
           client_id: string
           clinician_id: string
           cpt_code: string | null
@@ -194,11 +194,11 @@ export type Database = {
           buffer_after?: number | null
           buffer_before?: number | null
           claim_claimmd_batch_id?: string | null
-          claim_claimmd_id?: string | null
           claim_last_submission_date?: string | null
           claim_response_json?: Json | null
           claim_status?: string | null
           claim_status_last_checked?: string | null
+          claimid?: string | null
           client_id: string
           clinician_id: string
           cpt_code?: string | null
@@ -248,11 +248,11 @@ export type Database = {
           buffer_after?: number | null
           buffer_before?: number | null
           claim_claimmd_batch_id?: string | null
-          claim_claimmd_id?: string | null
           claim_last_submission_date?: string | null
           claim_response_json?: Json | null
           claim_status?: string | null
           claim_status_last_checked?: string | null
+          claimid?: string | null
           client_id?: string
           clinician_id?: string
           cpt_code?: string | null
