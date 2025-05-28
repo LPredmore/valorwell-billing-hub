@@ -43,7 +43,7 @@ Deno.serve(async (req: Request) => {
         place_of_service_code,
         billed_amount,
         claim_status,
-        claim_claimmd_id,
+        claimid,
         claim_last_submission_date,
         clients(
           id,
@@ -58,7 +58,7 @@ Deno.serve(async (req: Request) => {
         )
       `)
       .eq('status', status)
-      .is('claim_claimmd_id', null) // No existing claim ID
+      .is('claimid', null) // No existing claim ID
       .or('claim_status.is.null,claim_status.eq.rejected') // Either null or rejected claim status
       .order('start_at', { ascending: false })
       .limit(limit);

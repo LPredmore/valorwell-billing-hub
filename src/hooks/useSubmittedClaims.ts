@@ -6,7 +6,7 @@ export function useSubmittedClaims() {
   return useQuery({
     queryKey: ['submittedClaims'],
     queryFn: async () => {
-      // Fixed: Query the correct field name 'claimid' instead of 'claim_claimmd_id'
+      // Query appointments that have a claimid (meaning they've been submitted)
       const { data, error } = await supabase
         .from('appointments')
         .select(`
