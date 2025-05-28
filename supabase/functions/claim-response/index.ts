@@ -32,7 +32,9 @@ async function getLastResponseId(): Promise<number> {
       return 0;
     }
     
-    return parseInt(data.value, 10) || 0;
+    const responseId = parseInt(data.value, 10) || 0;
+    console.log(`Retrieved last response ID from settings: ${responseId}`);
+    return responseId;
   } catch (err) {
     console.error('Error retrieving last response ID:', err);
     return 0;
@@ -42,6 +44,7 @@ async function getLastResponseId(): Promise<number> {
 // Update the last response ID in system settings
 async function updateLastResponseId(responseId: number): Promise<void> {
   try {
+    console.log(`Updating last response ID to: ${responseId}`);
     const { error } = await supabase
       .from('system_settings')
       .upsert({ 
@@ -52,6 +55,8 @@ async function updateLastResponseId(responseId: number): Promise<void> {
     
     if (error) {
       console.error('Error updating last response ID:', error);
+    } else {
+      console.log(`Successfully updated last response ID to: ${responseId}`);
     }
   } catch (err) {
     console.error('Failed to update last response ID:', err);
@@ -61,6 +66,8 @@ async function updateLastResponseId(responseId: number): Promise<void> {
 // Update appointment claim status based on response
 async function updateAppointmentClaimStatus(claimId: string, status: string, responseData: any): Promise<void> {
   try {
+    console.log(`Updating claim status for claimId: ${claimId}, status: ${status}`);
+    
     const { data: appointments, error: queryError } = await supabase
       .from('appointments')
       .select('id')
@@ -72,6 +79,7 @@ async function updateAppointmentClaimStatus(claimId: string, status: string, res
     }
     
     const appointmentId = appointments[0].id;
+    console.log(`Found appointment ${appointmentId} for claim ${claimId}`);
     
     const { error: updateError } = await supabase
       .from('appointments')
@@ -87,6 +95,8 @@ async function updateAppointmentClaimStatus(claimId: string, status: string, res
     
     if (updateError) {
       console.error(`Error updating appointment ${appointmentId} status:`, updateError);
+    } else {
+      console.log(`Successfully updated appointment ${appointmentId} with status: ${status}`);
     }
   } catch (err) {
     console.error('Failed to update appointment claim status:', err);
@@ -97,12 +107,30 @@ async function updateAppointmentClaimStatus(claimId: string, status: string, res
 async function processResponseData(responseData: any): Promise<{ updatedCount: number }> {
   let updatedCount = 0;
   
-  if (!responseData || !responseData.claims) {
+  console.log('Processing response data:', JSON.stringify(responseData, null, 2));
+  
+  if (!responseData) {
+    console.log('No response data to process');
     return { updatedCount };
   }
   
-  for (const claim of responseData.claims) {
-    if (!claim.claimid) continue;
+  // Check different possible response structures
+  const claims = responseData.claims || responseData.claim || [];
+  console.log(`Found ${claims.length} claims in response`);
+  
+  if (!Array.isArray(claims)) {
+    console.log('Claims data is not an array:', typeof claims);
+    return { updatedCount };
+  }
+  
+  for (const claim of claims) {
+    if (!claim.claimid && !claim.claimmd_id) {
+      console.log('Skipping claim without ID:', claim);
+      continue;
+    }
+    
+    const claimId = claim.claimid || claim.claimmd_id;
+    console.log(`Processing claim: ${claimId}`);
     
     // Extract status from the claim response
     let status = 'Status Update Received';
@@ -117,13 +145,22 @@ async function processResponseData(responseData: any): Promise<{ updatedCount: n
       status = 'Accepted by Clearinghouse';
     } else if (claim.error) {
       status = `Error - ${claim.error}`;
+    } else if (claim.messages && Array.isArray(claim.messages) && claim.messages.length > 0) {
+      // Check for rejection messages
+      const rejectionMessages = claim.messages.filter(msg => msg.status === 'R');
+      if (rejectionMessages.length > 0) {
+        status = `Rejected - ${rejectionMessages.length} error(s)`;
+      }
     }
     
+    console.log(`Determined status for claim ${claimId}: ${status}`);
+    
     // Update the appointment with the claim status
-    await updateAppointmentClaimStatus(claim.claimid, status, claim);
+    await updateAppointmentClaimStatus(claimId, status, claim);
     updatedCount++;
   }
   
+  console.log(`Processed ${updatedCount} claims total`);
   return { updatedCount };
 }
 
@@ -145,40 +182,61 @@ Deno.serve(async (req: Request) => {
     
     // Get the current last response ID
     const lastResponseId = await getLastResponseId();
-    console.log(`Retrieving claim responses since ID: ${lastResponseId}`);
+    console.log(`Starting claim response retrieval with last ResponseID: ${lastResponseId}`);
     
-    // Call the Claim.MD API to get responses
-    const result = await callClaimMdApi(
+    // Try with the stored ResponseID first
+    let result = await callClaimMdApi(
       'response', 
       { ResponseID: lastResponseId },
       null // No client ID association for this operation
     );
     
     if (!result.success) {
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Failed to retrieve claim responses', 
-          details: result.error 
-        }),
-        { headers: { 'Content-Type': 'application/json', ...corsHeaders }, status: 500 }
+      console.error('First API call failed, trying with ResponseID=0');
+      
+      // If that fails, try with ResponseID=0 to get all responses
+      result = await callClaimMdApi(
+        'response', 
+        { ResponseID: 0 },
+        null
       );
+      
+      if (!result.success) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Failed to retrieve claim responses', 
+            details: result.error 
+          }),
+          { headers: { 'Content-Type': 'application/json', ...corsHeaders }, status: 500 }
+        );
+      }
     }
+    
+    console.log('API call successful, processing response data');
     
     // Process the response data to update appointment statuses
     const { updatedCount } = await processResponseData(result.data);
     
     // Update the last response ID if provided in the API response
+    let newLastResponseId = lastResponseId;
     if (result.data && result.data.last_responseid) {
-      await updateLastResponseId(result.data.last_responseid);
+      newLastResponseId = result.data.last_responseid;
+      await updateLastResponseId(newLastResponseId);
     }
+    
+    const message = updatedCount > 0 
+      ? `Successfully retrieved and processed ${updatedCount} claim status updates`
+      : 'No new claim status updates found';
+    
+    console.log(message);
     
     return new Response(
       JSON.stringify({ 
         success: true, 
         updatedCount,
-        lastResponseId: result.data?.last_responseid || lastResponseId,
-        message: `Successfully retrieved and processed ${updatedCount} claim status updates`
+        lastResponseId: newLastResponseId,
+        message
       }),
       { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     );
