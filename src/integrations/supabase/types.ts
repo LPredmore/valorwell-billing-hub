@@ -86,11 +86,59 @@ export type Database = {
           },
         ]
       }
+      appointment_templates: {
+        Row: {
+          color: string | null
+          created_at: string
+          default_notes: string | null
+          default_status: string
+          default_type: string
+          description: string | null
+          duration: number
+          id: string
+          is_default: boolean | null
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          default_notes?: string | null
+          default_status?: string
+          default_type?: string
+          description?: string | null
+          duration: number
+          id?: string
+          is_default?: boolean | null
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          default_notes?: string | null
+          default_status?: string
+          default_type?: string
+          description?: string | null
+          duration?: number
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       appointments: {
         Row: {
           appointment_recurring: string | null
+          appointment_timezone: Database["public"]["Enums"]["time_zones"] | null
           billed_amount: number | null
           billing_notes: string | null
+          buffer_after: number | null
+          buffer_before: number | null
           claim_claimmd_batch_id: string | null
           claim_claimmd_id: string | null
           claim_last_submission_date: string | null
@@ -107,11 +155,16 @@ export type Database = {
           era_check_eft_number: string | null
           era_claimmd_id: string | null
           era_payment_date: string | null
+          flexibility_window: Json | null
+          google_calendar_event_id: string | null
           id: string
           insurance_adjustment_amount: number | null
           insurance_adjustment_details_json: Json | null
           insurance_paid_amount: number | null
+          is_flexible: boolean | null
+          last_real_time_update: string | null
           last_statement_to_patient_date: string | null
+          last_synced_at: string | null
           modifiers: string[] | null
           notes: string | null
           patient_paid_amount: number | null
@@ -119,19 +172,27 @@ export type Database = {
           patient_payment_status: string | null
           patient_responsibility_amount: number | null
           place_of_service_code: string | null
+          priority: number | null
+          real_time_update_source: string | null
           recurring_group_id: string | null
           requires_billing_review: boolean | null
           start_at: string
           status: string
           stripe_charge_ids: string[] | null
+          template_id: string | null
           type: string
           updated_at: string
           video_room_url: string | null
         }
         Insert: {
           appointment_recurring?: string | null
+          appointment_timezone?:
+            | Database["public"]["Enums"]["time_zones"]
+            | null
           billed_amount?: number | null
           billing_notes?: string | null
+          buffer_after?: number | null
+          buffer_before?: number | null
           claim_claimmd_batch_id?: string | null
           claim_claimmd_id?: string | null
           claim_last_submission_date?: string | null
@@ -148,11 +209,16 @@ export type Database = {
           era_check_eft_number?: string | null
           era_claimmd_id?: string | null
           era_payment_date?: string | null
+          flexibility_window?: Json | null
+          google_calendar_event_id?: string | null
           id?: string
           insurance_adjustment_amount?: number | null
           insurance_adjustment_details_json?: Json | null
           insurance_paid_amount?: number | null
+          is_flexible?: boolean | null
+          last_real_time_update?: string | null
           last_statement_to_patient_date?: string | null
+          last_synced_at?: string | null
           modifiers?: string[] | null
           notes?: string | null
           patient_paid_amount?: number | null
@@ -160,19 +226,27 @@ export type Database = {
           patient_payment_status?: string | null
           patient_responsibility_amount?: number | null
           place_of_service_code?: string | null
+          priority?: number | null
+          real_time_update_source?: string | null
           recurring_group_id?: string | null
           requires_billing_review?: boolean | null
           start_at: string
           status?: string
           stripe_charge_ids?: string[] | null
+          template_id?: string | null
           type: string
           updated_at?: string
           video_room_url?: string | null
         }
         Update: {
           appointment_recurring?: string | null
+          appointment_timezone?:
+            | Database["public"]["Enums"]["time_zones"]
+            | null
           billed_amount?: number | null
           billing_notes?: string | null
+          buffer_after?: number | null
+          buffer_before?: number | null
           claim_claimmd_batch_id?: string | null
           claim_claimmd_id?: string | null
           claim_last_submission_date?: string | null
@@ -189,11 +263,16 @@ export type Database = {
           era_check_eft_number?: string | null
           era_claimmd_id?: string | null
           era_payment_date?: string | null
+          flexibility_window?: Json | null
+          google_calendar_event_id?: string | null
           id?: string
           insurance_adjustment_amount?: number | null
           insurance_adjustment_details_json?: Json | null
           insurance_paid_amount?: number | null
+          is_flexible?: boolean | null
+          last_real_time_update?: string | null
           last_statement_to_patient_date?: string | null
+          last_synced_at?: string | null
           modifiers?: string[] | null
           notes?: string | null
           patient_paid_amount?: number | null
@@ -201,11 +280,14 @@ export type Database = {
           patient_payment_status?: string | null
           patient_responsibility_amount?: number | null
           place_of_service_code?: string | null
+          priority?: number | null
+          real_time_update_source?: string | null
           recurring_group_id?: string | null
           requires_billing_review?: boolean | null
           start_at?: string
           status?: string
           stripe_charge_ids?: string[] | null
+          template_id?: string | null
           type?: string
           updated_at?: string
           video_room_url?: string | null
@@ -223,6 +305,13 @@ export type Database = {
             columns: ["clinician_id"]
             isOneToOne: false
             referencedRelation: "clinicians"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "appointment_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -662,6 +751,7 @@ export type Database = {
       }
       clients: {
         Row: {
+          client_address: string | null
           client_affect: string | null
           client_age: number | null
           client_appearance: string | null
@@ -758,6 +848,7 @@ export type Database = {
           client_tricare_sponsor_id: string | null
           client_tricare_sponsor_name: string | null
           client_vacoverage: string | null
+          client_zip_code: string | null
           client_zipcode: string | null
           created_at: string
           eligibility_claimmd_id_primary: string | null
@@ -773,6 +864,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          client_address?: string | null
           client_affect?: string | null
           client_age?: number | null
           client_appearance?: string | null
@@ -869,6 +961,7 @@ export type Database = {
           client_tricare_sponsor_id?: string | null
           client_tricare_sponsor_name?: string | null
           client_vacoverage?: string | null
+          client_zip_code?: string | null
           client_zipcode?: string | null
           created_at?: string
           eligibility_claimmd_id_primary?: string | null
@@ -884,6 +977,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          client_address?: string | null
           client_affect?: string | null
           client_age?: number | null
           client_appearance?: string | null
@@ -980,6 +1074,7 @@ export type Database = {
           client_tricare_sponsor_id?: string | null
           client_tricare_sponsor_name?: string | null
           client_vacoverage?: string | null
+          client_zip_code?: string | null
           client_zipcode?: string | null
           created_at?: string
           eligibility_claimmd_id_primary?: string | null
@@ -1174,11 +1269,13 @@ export type Database = {
           clinician_temppassword: string | null
           clinician_time_granularity: string | null
           clinician_time_zone: string | null
-          clinician_timezone: string[] | null
+          clinician_timezone: Database["public"]["Enums"]["time_zones"][] | null
           clinician_treatment_approaches: string[] | null
           clinician_type: string | null
           created_at: string
           id: string
+          last_google_sync: string | null
+          profile_id: string | null
           updated_at: string
         }
         Insert: {
@@ -1267,11 +1364,15 @@ export type Database = {
           clinician_temppassword?: string | null
           clinician_time_granularity?: string | null
           clinician_time_zone?: string | null
-          clinician_timezone?: string[] | null
+          clinician_timezone?:
+            | Database["public"]["Enums"]["time_zones"][]
+            | null
           clinician_treatment_approaches?: string[] | null
           clinician_type?: string | null
           created_at?: string
           id: string
+          last_google_sync?: string | null
+          profile_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -1360,14 +1461,386 @@ export type Database = {
           clinician_temppassword?: string | null
           clinician_time_granularity?: string | null
           clinician_time_zone?: string | null
-          clinician_timezone?: string[] | null
+          clinician_timezone?:
+            | Database["public"]["Enums"]["time_zones"][]
+            | null
           clinician_treatment_approaches?: string[] | null
           clinician_type?: string | null
           created_at?: string
           id?: string
+          last_google_sync?: string | null
+          profile_id?: string | null
           updated_at?: string
         }
         Relationships: []
+      }
+      cms1500_claims: {
+        Row: {
+          accept_assign: string | null
+          amount_paid: number | null
+          auto_accident: string | null
+          auto_accident_state: string | null
+          balance_due: number | null
+          charge: number | null
+          chg_prior_auth: string | null
+          chg_supv_prov_name_l: string | null
+          chiro_manifest_date: string | null
+          clia_number: string | null
+          client_id: string
+          cond_code_1: string | null
+          cond_code_2: string | null
+          cond_code_3: string | null
+          created_at: string | null
+          diag_1: string | null
+          diag_ref: string | null
+          emergency_indicator: string | null
+          epsdt_indicator: string | null
+          facility_addr_1: string | null
+          facility_addr_2: string | null
+          facility_city: string | null
+          facility_name: string | null
+          facility_state: string | null
+          facility_zip: string | null
+          from_date: string | null
+          icn_dcn_1: string | null
+          id: string
+          ins_addr_2: string | null
+          ins_city: string | null
+          ins_country: string | null
+          ins_dob: string | null
+          ins_employer: string | null
+          ins_group: string | null
+          ins_name_f: string | null
+          ins_name_l: string | null
+          ins_name_m: string | null
+          ins_number: string | null
+          ins_phone: string | null
+          ins_plan: string | null
+          ins_sex: string | null
+          ins_state: string | null
+          ins_zip: string | null
+          lastseen_date: string | null
+          mod1: string | null
+          mod2: string | null
+          mod3: string | null
+          mod4: string | null
+          narrative: string | null
+          nowork_from_date: string | null
+          onset_date: string | null
+          ord_prov_addr_1: string | null
+          ord_prov_addr_2: string | null
+          ord_prov_city: string | null
+          ord_prov_name_f: string | null
+          ord_prov_name_l: string | null
+          ord_prov_name_m: string | null
+          ord_prov_npi: string | null
+          ord_prov_state: string | null
+          ord_prov_zip: string | null
+          other_accident: string | null
+          other_claimfilingcode: string | null
+          other_ins_dob: string | null
+          other_ins_group: string | null
+          other_ins_medicare_code: string | null
+          other_ins_name_f: string | null
+          other_ins_name_l: string | null
+          other_ins_name_m: string | null
+          other_ins_number: string | null
+          other_ins_payment_date: string | null
+          other_ins_sex: string | null
+          other_pat_rel: string | null
+          other_payer_addr_1: string | null
+          other_payer_addr_2: string | null
+          other_payer_city: string | null
+          other_payer_name: string | null
+          other_payer_state: string | null
+          other_payer_zip: string | null
+          other_payerid: string | null
+          pat_city: string | null
+          pat_country: string | null
+          pat_dob: string | null
+          pat_marital: string | null
+          pat_name_f: string | null
+          pat_name_l: string | null
+          pat_name_m: string | null
+          pat_phone: string | null
+          pat_rel: string | null
+          pat_sex: string | null
+          pat_state: string | null
+          pat_zip: string | null
+          payer_addr_1: string | null
+          payer_addr_2: string | null
+          payer_city: string | null
+          payer_name: string | null
+          payer_state: string | null
+          payer_zip: string | null
+          payerid: string | null
+          pcn: string | null
+          place_of_service: string | null
+          primary_paid_amount_2: number | null
+          primary_paid_date: string | null
+          prior_auth: string | null
+          proc_code: string | null
+          prov_id: string | null
+          prov_npi: string | null
+          prov_taxonomy: string | null
+          ref_id: string | null
+          ref_name_f: string | null
+          ref_name_l: string | null
+          ref_name_m: string | null
+          ref_npi: string | null
+          referral_number: string | null
+          stripe_customer_id: string | null
+          thru_date: string | null
+          total_charge: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          accept_assign?: string | null
+          amount_paid?: number | null
+          auto_accident?: string | null
+          auto_accident_state?: string | null
+          balance_due?: number | null
+          charge?: number | null
+          chg_prior_auth?: string | null
+          chg_supv_prov_name_l?: string | null
+          chiro_manifest_date?: string | null
+          clia_number?: string | null
+          client_id: string
+          cond_code_1?: string | null
+          cond_code_2?: string | null
+          cond_code_3?: string | null
+          created_at?: string | null
+          diag_1?: string | null
+          diag_ref?: string | null
+          emergency_indicator?: string | null
+          epsdt_indicator?: string | null
+          facility_addr_1?: string | null
+          facility_addr_2?: string | null
+          facility_city?: string | null
+          facility_name?: string | null
+          facility_state?: string | null
+          facility_zip?: string | null
+          from_date?: string | null
+          icn_dcn_1?: string | null
+          id?: string
+          ins_addr_2?: string | null
+          ins_city?: string | null
+          ins_country?: string | null
+          ins_dob?: string | null
+          ins_employer?: string | null
+          ins_group?: string | null
+          ins_name_f?: string | null
+          ins_name_l?: string | null
+          ins_name_m?: string | null
+          ins_number?: string | null
+          ins_phone?: string | null
+          ins_plan?: string | null
+          ins_sex?: string | null
+          ins_state?: string | null
+          ins_zip?: string | null
+          lastseen_date?: string | null
+          mod1?: string | null
+          mod2?: string | null
+          mod3?: string | null
+          mod4?: string | null
+          narrative?: string | null
+          nowork_from_date?: string | null
+          onset_date?: string | null
+          ord_prov_addr_1?: string | null
+          ord_prov_addr_2?: string | null
+          ord_prov_city?: string | null
+          ord_prov_name_f?: string | null
+          ord_prov_name_l?: string | null
+          ord_prov_name_m?: string | null
+          ord_prov_npi?: string | null
+          ord_prov_state?: string | null
+          ord_prov_zip?: string | null
+          other_accident?: string | null
+          other_claimfilingcode?: string | null
+          other_ins_dob?: string | null
+          other_ins_group?: string | null
+          other_ins_medicare_code?: string | null
+          other_ins_name_f?: string | null
+          other_ins_name_l?: string | null
+          other_ins_name_m?: string | null
+          other_ins_number?: string | null
+          other_ins_payment_date?: string | null
+          other_ins_sex?: string | null
+          other_pat_rel?: string | null
+          other_payer_addr_1?: string | null
+          other_payer_addr_2?: string | null
+          other_payer_city?: string | null
+          other_payer_name?: string | null
+          other_payer_state?: string | null
+          other_payer_zip?: string | null
+          other_payerid?: string | null
+          pat_city?: string | null
+          pat_country?: string | null
+          pat_dob?: string | null
+          pat_marital?: string | null
+          pat_name_f?: string | null
+          pat_name_l?: string | null
+          pat_name_m?: string | null
+          pat_phone?: string | null
+          pat_rel?: string | null
+          pat_sex?: string | null
+          pat_state?: string | null
+          pat_zip?: string | null
+          payer_addr_1?: string | null
+          payer_addr_2?: string | null
+          payer_city?: string | null
+          payer_name?: string | null
+          payer_state?: string | null
+          payer_zip?: string | null
+          payerid?: string | null
+          pcn?: string | null
+          place_of_service?: string | null
+          primary_paid_amount_2?: number | null
+          primary_paid_date?: string | null
+          prior_auth?: string | null
+          proc_code?: string | null
+          prov_id?: string | null
+          prov_npi?: string | null
+          prov_taxonomy?: string | null
+          ref_id?: string | null
+          ref_name_f?: string | null
+          ref_name_l?: string | null
+          ref_name_m?: string | null
+          ref_npi?: string | null
+          referral_number?: string | null
+          stripe_customer_id?: string | null
+          thru_date?: string | null
+          total_charge?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          accept_assign?: string | null
+          amount_paid?: number | null
+          auto_accident?: string | null
+          auto_accident_state?: string | null
+          balance_due?: number | null
+          charge?: number | null
+          chg_prior_auth?: string | null
+          chg_supv_prov_name_l?: string | null
+          chiro_manifest_date?: string | null
+          clia_number?: string | null
+          client_id?: string
+          cond_code_1?: string | null
+          cond_code_2?: string | null
+          cond_code_3?: string | null
+          created_at?: string | null
+          diag_1?: string | null
+          diag_ref?: string | null
+          emergency_indicator?: string | null
+          epsdt_indicator?: string | null
+          facility_addr_1?: string | null
+          facility_addr_2?: string | null
+          facility_city?: string | null
+          facility_name?: string | null
+          facility_state?: string | null
+          facility_zip?: string | null
+          from_date?: string | null
+          icn_dcn_1?: string | null
+          id?: string
+          ins_addr_2?: string | null
+          ins_city?: string | null
+          ins_country?: string | null
+          ins_dob?: string | null
+          ins_employer?: string | null
+          ins_group?: string | null
+          ins_name_f?: string | null
+          ins_name_l?: string | null
+          ins_name_m?: string | null
+          ins_number?: string | null
+          ins_phone?: string | null
+          ins_plan?: string | null
+          ins_sex?: string | null
+          ins_state?: string | null
+          ins_zip?: string | null
+          lastseen_date?: string | null
+          mod1?: string | null
+          mod2?: string | null
+          mod3?: string | null
+          mod4?: string | null
+          narrative?: string | null
+          nowork_from_date?: string | null
+          onset_date?: string | null
+          ord_prov_addr_1?: string | null
+          ord_prov_addr_2?: string | null
+          ord_prov_city?: string | null
+          ord_prov_name_f?: string | null
+          ord_prov_name_l?: string | null
+          ord_prov_name_m?: string | null
+          ord_prov_npi?: string | null
+          ord_prov_state?: string | null
+          ord_prov_zip?: string | null
+          other_accident?: string | null
+          other_claimfilingcode?: string | null
+          other_ins_dob?: string | null
+          other_ins_group?: string | null
+          other_ins_medicare_code?: string | null
+          other_ins_name_f?: string | null
+          other_ins_name_l?: string | null
+          other_ins_name_m?: string | null
+          other_ins_number?: string | null
+          other_ins_payment_date?: string | null
+          other_ins_sex?: string | null
+          other_pat_rel?: string | null
+          other_payer_addr_1?: string | null
+          other_payer_addr_2?: string | null
+          other_payer_city?: string | null
+          other_payer_name?: string | null
+          other_payer_state?: string | null
+          other_payer_zip?: string | null
+          other_payerid?: string | null
+          pat_city?: string | null
+          pat_country?: string | null
+          pat_dob?: string | null
+          pat_marital?: string | null
+          pat_name_f?: string | null
+          pat_name_l?: string | null
+          pat_name_m?: string | null
+          pat_phone?: string | null
+          pat_rel?: string | null
+          pat_sex?: string | null
+          pat_state?: string | null
+          pat_zip?: string | null
+          payer_addr_1?: string | null
+          payer_addr_2?: string | null
+          payer_city?: string | null
+          payer_name?: string | null
+          payer_state?: string | null
+          payer_zip?: string | null
+          payerid?: string | null
+          pcn?: string | null
+          place_of_service?: string | null
+          primary_paid_amount_2?: number | null
+          primary_paid_date?: string | null
+          prior_auth?: string | null
+          proc_code?: string | null
+          prov_id?: string | null
+          prov_npi?: string | null
+          prov_taxonomy?: string | null
+          ref_id?: string | null
+          ref_name_f?: string | null
+          ref_name_l?: string | null
+          ref_name_m?: string | null
+          ref_npi?: string | null
+          referral_number?: string | null
+          stripe_customer_id?: string | null
+          thru_date?: string | null
+          total_charge?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cms1500_claims_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       completed_appointments: {
         Row: {
@@ -1583,6 +2056,7 @@ export type Database = {
           details: Json | null
           id: number
           migration_name: string
+          status: string
         }
         Insert: {
           created_at?: string | null
@@ -1590,6 +2064,7 @@ export type Database = {
           details?: Json | null
           id?: number
           migration_name: string
+          status?: string
         }
         Update: {
           created_at?: string | null
@@ -1597,6 +2072,7 @@ export type Database = {
           details?: Json | null
           id?: number
           migration_name?: string
+          status?: string
         }
         Relationships: []
       }
@@ -1710,6 +2186,90 @@ export type Database = {
           practice_taxonomy?: string | null
           practice_zip?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      real_time_notifications: {
+        Row: {
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          is_read: boolean | null
+          message: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          is_read?: boolean | null
+          message: string
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          is_read?: boolean | null
+          message?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      scheduling_preferences: {
+        Row: {
+          allow_concurrent_appointments: boolean | null
+          auto_confirm_threshold: number | null
+          buffer_between_appointments: number | null
+          created_at: string
+          default_appointment_duration: number | null
+          enable_real_time_updates: boolean | null
+          id: string
+          max_daily_appointments: number | null
+          real_time_notification_preferences: Json | null
+          timezone: string
+          updated_at: string
+          user_id: string
+          working_hours: Json | null
+        }
+        Insert: {
+          allow_concurrent_appointments?: boolean | null
+          auto_confirm_threshold?: number | null
+          buffer_between_appointments?: number | null
+          created_at?: string
+          default_appointment_duration?: number | null
+          enable_real_time_updates?: boolean | null
+          id?: string
+          max_daily_appointments?: number | null
+          real_time_notification_preferences?: Json | null
+          timezone?: string
+          updated_at?: string
+          user_id: string
+          working_hours?: Json | null
+        }
+        Update: {
+          allow_concurrent_appointments?: boolean | null
+          auto_confirm_threshold?: number | null
+          buffer_between_appointments?: number | null
+          created_at?: string
+          default_appointment_duration?: number | null
+          enable_real_time_updates?: boolean | null
+          id?: string
+          max_daily_appointments?: number | null
+          real_time_notification_preferences?: Json | null
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+          working_hours?: Json | null
         }
         Relationships: []
       }
@@ -2032,6 +2592,56 @@ export type Database = {
         }
         Relationships: []
       }
+      synced_events: {
+        Row: {
+          clinician_id: string
+          created_at: string | null
+          display_title: string | null
+          end_at: string
+          google_calendar_event_id: string | null
+          id: string
+          is_busy: boolean | null
+          original_description: string | null
+          original_title: string | null
+          start_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          clinician_id: string
+          created_at?: string | null
+          display_title?: string | null
+          end_at: string
+          google_calendar_event_id?: string | null
+          id?: string
+          is_busy?: boolean | null
+          original_description?: string | null
+          original_title?: string | null
+          start_at: string
+          updated_at?: string | null
+        }
+        Update: {
+          clinician_id?: string
+          created_at?: string | null
+          display_title?: string | null
+          end_at?: string
+          google_calendar_event_id?: string | null
+          id?: string
+          is_busy?: boolean | null
+          original_description?: string | null
+          original_title?: string | null
+          start_at?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "synced_events_clinician_id_fkey"
+            columns: ["clinician_id"]
+            isOneToOne: false
+            referencedRelation: "clinicians"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       system_settings: {
         Row: {
           created_at: string | null
@@ -2181,6 +2791,33 @@ export type Database = {
           },
         ]
       }
+      user_profiles: {
+        Row: {
+          auth_provider: string
+          created_at: string | null
+          email: string | null
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          auth_provider?: string
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          auth_provider?: string
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -2216,6 +2853,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      get_unread_notification_count: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
       is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
@@ -2227,6 +2868,10 @@ export type Database = {
       is_clinician: {
         Args: { user_id: string }
         Returns: boolean
+      }
+      mark_notifications_as_read: {
+        Args: { p_user_id: string; p_notification_ids?: string[] }
+        Returns: number
       }
       standardize_uuid: {
         Args: { input_id: string }
@@ -2256,6 +2901,7 @@ export type Database = {
         | "Discharged"
         | "Blacklist"
         | "Do Not Contact"
+        | "Scheduled"
       client_va_coverage_type:
         | "CHAMPVA"
         | "VA Community Care"
@@ -2275,6 +2921,15 @@ export type Database = {
         | "therapy_note"
         | "questionnaire"
       event_type: "appointment" | "time_off" | "availability"
+      insurance_type:
+        | "PPO"
+        | "HMO"
+        | "EPO"
+        | "POS"
+        | "Medicare"
+        | "Medicaid"
+        | "CHIP"
+        | "Other"
       states:
         | "Alabama"
         | "Alaska"
@@ -2332,6 +2987,14 @@ export type Database = {
         | "West Virginia"
         | "Wisconsin"
         | "Wyoming"
+      time_zones:
+        | "America/New_York"
+        | "America/Chicago"
+        | "America/Denver"
+        | "America/Los_Angeles"
+        | "America/Anchorage"
+        | "Pacific/Honolulu"
+        | "America/Phoenix"
       user_role: "user" | "admin"
     }
     CompositeTypes: {
@@ -2466,6 +3129,7 @@ export const Constants = {
         "Discharged",
         "Blacklist",
         "Do Not Contact",
+        "Scheduled",
       ],
       client_va_coverage_type: [
         "CHAMPVA",
@@ -2489,6 +3153,16 @@ export const Constants = {
         "questionnaire",
       ],
       event_type: ["appointment", "time_off", "availability"],
+      insurance_type: [
+        "PPO",
+        "HMO",
+        "EPO",
+        "POS",
+        "Medicare",
+        "Medicaid",
+        "CHIP",
+        "Other",
+      ],
       states: [
         "Alabama",
         "Alaska",
@@ -2546,6 +3220,15 @@ export const Constants = {
         "West Virginia",
         "Wisconsin",
         "Wyoming",
+      ],
+      time_zones: [
+        "America/New_York",
+        "America/Chicago",
+        "America/Denver",
+        "America/Los_Angeles",
+        "America/Anchorage",
+        "Pacific/Honolulu",
+        "America/Phoenix",
       ],
       user_role: ["user", "admin"],
     },

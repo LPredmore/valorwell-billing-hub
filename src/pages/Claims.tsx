@@ -1,12 +1,14 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ClipboardList, Filter, RefreshCcw, FileText, AlertCircle, DollarSign } from "lucide-react";
+import { ClipboardList, Filter, RefreshCcw, FileText, AlertCircle, DollarSign, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBillableAppointments, useClaimStatusUpdates, useEraRetrieval } from "@/hooks/useClaimsData";
+import { useSubmittedClaims } from "@/hooks/useSubmittedClaims";
 import BillingQueue from "@/components/claims/BillingQueue";
+import SubmittedClaimsQueue from "@/components/claims/SubmittedClaimsQueue";
 import ClaimDetail from "@/components/claims/ClaimDetail";
 import ClaimBatch from "@/components/claims/ClaimBatch";
 import EraManagement from "@/components/claims/EraManagement";
@@ -19,10 +21,17 @@ export default function Claims() {
   
   const {
     data: billableAppointments,
-    isLoading,
-    refetch,
-    error,
+    isLoading: isLoadingBillable,
+    refetch: refetchBillable,
+    error: billableError,
   } = useBillableAppointments();
+
+  const {
+    data: submittedClaims,
+    isLoading: isLoadingSubmitted,
+    refetch: refetchSubmitted,
+    error: submittedError,
+  } = useSubmittedClaims();
 
   const { 
     mutate: updateClaimStatuses,
@@ -70,7 +79,8 @@ export default function Claims() {
   const handleUpdateStatuses = () => {
     updateClaimStatuses(undefined, {
       onSuccess: () => {
-        refetch();
+        refetchBillable();
+        refetchSubmitted();
       }
     });
   };
@@ -78,9 +88,15 @@ export default function Claims() {
   const handleRetrieveEra = () => {
     retrieveEraFiles(undefined, {
       onSuccess: () => {
-        refetch();
+        refetchBillable();
+        refetchSubmitted();
       }
     });
+  };
+
+  const handleRefresh = () => {
+    refetchBillable();
+    refetchSubmitted();
   };
 
   return (
@@ -121,7 +137,7 @@ export default function Claims() {
             Process ERA Files
           </Button>
           <Button
-            onClick={() => refetch()}
+            onClick={handleRefresh}
             variant="outline"
             className="gap-2"
           >
@@ -132,10 +148,14 @@ export default function Claims() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="billing" className="flex items-center gap-2">
             <ClipboardList className="h-4 w-4" />
-            Claim Preparation
+            Ready for Submission
+          </TabsTrigger>
+          <TabsTrigger value="submitted" className="flex items-center gap-2">
+            <CheckCircle className="h-4 w-4" />
+            Submitted Claims
           </TabsTrigger>
           <TabsTrigger value="payments" className="flex items-center gap-2">
             <DollarSign className="h-4 w-4" />
@@ -165,8 +185,8 @@ export default function Claims() {
               <CardContent>
                 <BillingQueue
                   appointments={filteredAppointments || []}
-                  isLoading={isLoading}
-                  error={error}
+                  isLoading={isLoadingBillable}
+                  error={billableError}
                   selectedAppointmentId={selectedAppointmentId}
                   onAppointmentSelect={handleAppointmentSelect}
                   selectedAppointmentIds={selectedAppointmentIds}
@@ -198,9 +218,50 @@ export default function Claims() {
                   selectedAppointmentIds={selectedAppointmentIds}
                   onSuccess={() => {
                     setSelectedAppointmentIds([]);
-                    refetch();
+                    handleRefresh();
                   }}
                 />
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="submitted" className="mt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Submitted Claims Queue */}
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-3">
+                <CardTitle>Submitted Claims</CardTitle>
+                <CardDescription>Claims that have been submitted to the clearinghouse</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <SubmittedClaimsQueue
+                  appointments={submittedClaims || []}
+                  isLoading={isLoadingSubmitted}
+                  error={submittedError}
+                  selectedAppointmentId={selectedAppointmentId}
+                  onAppointmentSelect={handleAppointmentSelect}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Claim Detail */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle>Claim Details</CardTitle>
+                <CardDescription>Review submitted claim details and status</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {selectedAppointmentId ? (
+                  <ClaimDetail
+                    appointmentId={selectedAppointmentId}
+                    onClose={() => setSelectedAppointmentId(null)}
+                  />
+                ) : (
+                  <div className="text-center p-4 text-muted-foreground">
+                    <p>Select a submitted claim to view details</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
