@@ -6,6 +6,8 @@ export function useSubmittedClaims() {
   return useQuery({
     queryKey: ['submittedClaims'],
     queryFn: async () => {
+      console.log('=== FETCHING SUBMITTED CLAIMS ===');
+      
       // Query appointments that have a claimid (meaning they've been submitted)
       const { data, error } = await supabase
         .from('appointments')
@@ -34,6 +36,11 @@ export function useSubmittedClaims() {
         .not('claimid', 'is', null)
         .order('claim_last_submission_date', { ascending: false });
 
+      console.log('Raw database query result:');
+      console.log('  Error:', error);
+      console.log('  Data count:', data?.length || 0);
+      console.log('  Data sample:', data?.slice(0, 2));
+
       if (error) {
         console.error('Error fetching submitted claims:', error);
         throw error;
@@ -44,7 +51,7 @@ export function useSubmittedClaims() {
         const client = appt.clients;
         const clinician = appt.clinicians;
         
-        return {
+        const formatted = {
           id: appt.id,
           start_at: appt.start_at,
           claim_claimmd_id: appt.claimid, // Map claimid to expected property name for UI compatibility
@@ -69,8 +76,19 @@ export function useSubmittedClaims() {
             last_submitted: appt.claim_last_submission_date
           }
         };
+        
+        console.log(`Formatted claim ${appt.id}:`, {
+          claimid: appt.claimid,
+          client_name: formatted.client.name,
+          status: formatted.billing.status
+        });
+        
+        return formatted;
       }) || [];
 
+      console.log('=== SUBMITTED CLAIMS PROCESSING COMPLETE ===');
+      console.log(`Total formatted claims: ${formattedClaims.length}`);
+      
       return formattedClaims;
     },
     refetchOnWindowFocus: false,

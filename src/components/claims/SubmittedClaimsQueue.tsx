@@ -62,9 +62,27 @@ export default function SubmittedClaimsQueue({
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // DEBUGGING: Log the raw appointments data to understand what we're receiving
-  console.log('SubmittedClaimsQueue received appointments:', appointments);
-  console.log('Number of appointments:', appointments?.length || 0);
+  // ENHANCED DEBUGGING: Log detailed information about the component state
+  console.log('=== SUBMITTED CLAIMS QUEUE RENDER ===');
+  console.log('Component props:');
+  console.log('  isLoading:', isLoading);
+  console.log('  error:', error);
+  console.log('  appointments received:', appointments?.length || 0);
+  console.log('  searchQuery:', searchQuery);
+  console.log('  statusFilter:', statusFilter);
+  
+  if (appointments && appointments.length > 0) {
+    console.log('Sample appointments data:');
+    appointments.slice(0, 3).forEach((appt, idx) => {
+      console.log(`  Appointment ${idx + 1}:`, {
+        id: appt.id,
+        client_name: appt.client.name,
+        claim_id: appt.claim_claimmd_id,
+        status: appt.billing.status,
+        amount: appt.billing.amount
+      });
+    });
+  }
 
   const getStatusBadge = (status: string) => {
     switch (status?.toLowerCase()) {
@@ -98,15 +116,27 @@ export default function SubmittedClaimsQueue({
     return matchesSearch && matchesStatus;
   }) || [];
 
-  // DEBUGGING: Log the filtered results
-  console.log('Filtered appointments:', filteredAppointments);
+  // ENHANCED DEBUGGING: Log filtering results
+  console.log('Filtering results:');
+  console.log('  Before filtering:', appointments?.length || 0);
+  console.log('  After search filter:', filteredAppointments.length);
+  console.log('  Search query:', searchQuery);
+  console.log('  Status filter:', statusFilter);
 
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const displayedAppointments = filteredAppointments.slice(startIndex, endIndex);
   const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
 
+  console.log('Pagination:');
+  console.log('  Current page:', currentPage);
+  console.log('  Items per page:', itemsPerPage);
+  console.log('  Displayed appointments:', displayedAppointments.length);
+  console.log('  Total pages:', totalPages);
+
   if (error) {
+    console.error('=== ERROR STATE ===');
+    console.error('Error object:', error);
     return (
       <div className="flex flex-col items-center justify-center p-6 text-center rounded-md bg-destructive/10 border border-destructive/20">
         <h3 className="font-medium text-destructive">Failed to load submitted claims</h3>
@@ -178,60 +208,78 @@ export default function SubmittedClaimsQueue({
               <TableRow>
                 <TableCell colSpan={9} className="h-24 text-center">
                   <div className="space-y-2">
-                    <div>
+                    <div className="text-lg font-medium">
                       {filteredAppointments.length === 0 && searchQuery ? 
                         "No submitted claims match your search" : 
-                        "No submitted claims found"
+                        appointments?.length === 0 ? "No submitted claims found" : "No results for current filters"
                       }
                     </div>
-                    {/* DEBUGGING: Show raw data info */}
-                    {!isLoading && appointments && (
-                      <div className="text-xs text-muted-foreground">
-                        Raw data: {appointments.length} total appointments received
-                        {appointments.length > 0 && (
-                          <div className="mt-1">
-                            Sample: {JSON.stringify(appointments[0], null, 2).substring(0, 200)}...
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    
+                    {/* ENHANCED DEBUGGING INFO */}
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <div>Debug Info:</div>
+                      <div>• Raw appointments: {appointments?.length || 0}</div>
+                      <div>• After filters: {filteredAppointments.length}</div>
+                      <div>• Loading state: {isLoading ? 'true' : 'false'}</div>
+                      <div>• Error state: {error ? 'true' : 'false'}</div>
+                      <div>• Search query: "{searchQuery}"</div>
+                      <div>• Status filter: "{statusFilter}"</div>
+                      
+                      {appointments && appointments.length > 0 && (
+                        <div className="mt-2 p-2 bg-gray-50 rounded text-left">
+                          <div className="font-medium">Sample appointment data:</div>
+                          <pre className="text-xs mt-1 overflow-auto">
+                            {JSON.stringify(appointments[0], null, 2).substring(0, 300)}...
+                          </pre>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </TableCell>
               </TableRow>
             ) : (
-              displayedAppointments.map((appointment) => (
-                <TableRow 
-                  key={appointment.id}
-                  className={selectedAppointmentId === appointment.id ? "bg-muted" : undefined}
-                >
-                  <TableCell className="font-medium">{appointment.client.name}</TableCell>
-                  <TableCell>{new Date(appointment.start_at).toLocaleDateString()}</TableCell>
-                  <TableCell>{appointment.service.cpt_code || "—"}</TableCell>
-                  <TableCell className="font-mono text-sm">{appointment.claim_claimmd_id}</TableCell>
-                  <TableCell>${appointment.billing.amount?.toFixed(2) || "0.00"}</TableCell>
-                  <TableCell>
-                    {appointment.insurance_paid_amount ? 
-                      `$${appointment.insurance_paid_amount.toFixed(2)}` : "—"}
-                  </TableCell>
-                  <TableCell>
-                    {getStatusBadge(appointment.billing.status)}
-                  </TableCell>
-                  <TableCell>
-                    {appointment.billing.last_submitted ? 
-                      formatDistanceToNow(new Date(appointment.billing.last_submitted), { addSuffix: true }) : 
-                      "—"}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onAppointmentSelect(appointment.id)}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
+              displayedAppointments.map((appointment) => {
+                console.log('Rendering appointment row:', {
+                  id: appointment.id,
+                  patient: appointment.client.name,
+                  claimId: appointment.claim_claimmd_id,
+                  status: appointment.billing.status
+                });
+                
+                return (
+                  <TableRow 
+                    key={appointment.id}
+                    className={selectedAppointmentId === appointment.id ? "bg-muted" : undefined}
+                  >
+                    <TableCell className="font-medium">{appointment.client.name}</TableCell>
+                    <TableCell>{new Date(appointment.start_at).toLocaleDateString()}</TableCell>
+                    <TableCell>{appointment.service.cpt_code || "—"}</TableCell>
+                    <TableCell className="font-mono text-sm">{appointment.claim_claimmd_id}</TableCell>
+                    <TableCell>${appointment.billing.amount?.toFixed(2) || "0.00"}</TableCell>
+                    <TableCell>
+                      {appointment.insurance_paid_amount ? 
+                        `$${appointment.insurance_paid_amount.toFixed(2)}` : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {getStatusBadge(appointment.billing.status)}
+                    </TableCell>
+                    <TableCell>
+                      {appointment.billing.last_submitted ? 
+                        formatDistanceToNow(new Date(appointment.billing.last_submitted), { addSuffix: true }) : 
+                        "—"}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onAppointmentSelect(appointment.id)}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -274,12 +322,16 @@ export default function SubmittedClaimsQueue({
       <div className="text-sm text-muted-foreground">
         {filteredAppointments.length} submitted claim{filteredAppointments.length !== 1 ? 's' : ''} found
         {searchQuery && ` (filtered from ${appointments?.length || 0} total)`}
-        {/* DEBUGGING: Show additional info */}
-        {!isLoading && (
-          <div className="mt-1 text-xs">
-            Debug: Raw appointments={appointments?.length || 0}, Filtered={filteredAppointments.length}, Displayed={displayedAppointments.length}
-          </div>
-        )}
+        
+        {/* ENHANCED DEBUG SUMMARY */}
+        <div className="mt-2 text-xs space-y-1">
+          <div className="font-medium">Debug Summary:</div>
+          <div>• Hook loading: {isLoading ? 'YES' : 'NO'}</div>
+          <div>• Hook error: {error ? 'YES' : 'NO'}</div>
+          <div>• Raw data count: {appointments?.length || 0}</div>
+          <div>• After filtering: {filteredAppointments.length}</div>
+          <div>• Currently displayed: {displayedAppointments.length}</div>
+        </div>
       </div>
     </div>
   );
