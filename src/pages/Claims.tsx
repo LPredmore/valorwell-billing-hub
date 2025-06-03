@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClipboardList, Filter, RefreshCcw, FileText, AlertCircle, DollarSign, CheckCircle } from "lucide-react";
@@ -12,6 +11,7 @@ import SubmittedClaimsQueue from "@/components/claims/SubmittedClaimsQueue";
 import ClaimDetail from "@/components/claims/ClaimDetail";
 import ClaimBatch from "@/components/claims/ClaimBatch";
 import EraManagement from "@/components/claims/EraManagement";
+import SubmittedClaimsTest from "@/components/claims/SubmittedClaimsTest";
 
 export default function Claims() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -238,43 +238,49 @@ export default function Claims() {
         </TabsContent>
 
         <TabsContent value="submitted" className="mt-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Submitted Claims Queue */}
-            <Card className="lg:col-span-2">
-              <CardHeader className="pb-3">
-                <CardTitle>Submitted Claims</CardTitle>
-                <CardDescription>Claims that have been submitted to the clearinghouse</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <SubmittedClaimsQueue
-                  appointments={submittedClaims || []}
-                  isLoading={isLoadingSubmitted}
-                  error={submittedError}
-                  selectedAppointmentId={selectedAppointmentId}
-                  onAppointmentSelect={handleAppointmentSelect}
-                />
-              </CardContent>
-            </Card>
+          <div className="space-y-6">
+            {/* Test Component - Remove once working */}
+            <SubmittedClaimsTest />
+            
+            {/* Original Implementation - Hidden for now */}
+            <div style={{ display: 'none' }}>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Card className="lg:col-span-2">
+                  <CardHeader className="pb-3">
+                    <CardTitle>Submitted Claims</CardTitle>
+                    <CardDescription>Claims that have been submitted to the clearinghouse</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <SubmittedClaimsQueue
+                      appointments={submittedClaims || []}
+                      isLoading={isLoadingSubmitted}
+                      error={submittedError}
+                      selectedAppointmentId={selectedAppointmentId}
+                      onAppointmentSelect={handleAppointmentSelect}
+                    />
+                  </CardContent>
+                </Card>
 
-            {/* Claim Detail */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle>Claim Details</CardTitle>
-                <CardDescription>Review submitted claim details and status</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {selectedAppointmentId ? (
-                  <ClaimDetail
-                    appointmentId={selectedAppointmentId}
-                    onClose={() => setSelectedAppointmentId(null)}
-                  />
-                ) : (
-                  <div className="text-center p-4 text-muted-foreground">
-                    <p>Select a submitted claim to view details</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle>Claim Details</CardTitle>
+                    <CardDescription>Review submitted claim details and status</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {selectedAppointmentId ? (
+                      <ClaimDetail
+                        appointmentId={selectedAppointmentId}
+                        onClose={() => setSelectedAppointmentId(null)}
+                      />
+                    ) : (
+                      <div className="text-center p-4 text-muted-foreground">
+                        <p>Select a submitted claim to view details</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </div>
         </TabsContent>
         
