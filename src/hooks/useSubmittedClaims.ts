@@ -6,7 +6,7 @@ export function useSubmittedClaims() {
   return useQuery({
     queryKey: ['submittedClaims'],
     queryFn: async () => {
-      console.log('=== FETCHING SUBMITTED CLAIMS ===');
+      console.log('=== FETCHING SUBMITTED CLAIMS (ENHANCED DEBUG) ===');
       
       // Query appointments that have a claimid (meaning they've been submitted)
       const { data, error } = await supabase
@@ -36,35 +36,54 @@ export function useSubmittedClaims() {
         .not('claimid', 'is', null)
         .order('claim_last_submission_date', { ascending: false });
 
-      console.log('Raw database query result:');
+      console.log('=== RAW DATABASE QUERY RESULT ===');
       console.log('  Error:', error);
       console.log('  Data count:', data?.length || 0);
-      console.log('  Data sample:', data?.slice(0, 2));
+      console.log('  First 3 records:', data?.slice(0, 3));
 
       if (error) {
-        console.error('Error fetching submitted claims:', error);
+        console.error('ERROR: Database query failed:', error);
         throw error;
       }
 
-      // Format the response data
-      const formattedClaims = data?.map(appt => {
+      if (!data || data.length === 0) {
+        console.log('WARNING: No submitted claims found in database');
+        return [];
+      }
+
+      // SIMPLIFIED DATA TRANSFORMATION with extensive debugging
+      const formattedClaims = data.map((appt, index) => {
+        console.log(`\n=== PROCESSING APPOINTMENT ${index + 1}/${data.length} ===`);
+        console.log('  Raw appointment:', appt);
+        
         const client = appt.clients;
         const clinician = appt.clinicians;
+        
+        // Validate required data
+        if (!client) {
+          console.warn(`  WARNING: No client data for appointment ${appt.id}`);
+        }
+        if (!clinician) {
+          console.warn(`  WARNING: No clinician data for appointment ${appt.id}`);
+        }
+        if (!appt.claimid) {
+          console.warn(`  WARNING: No claimid for appointment ${appt.id}`);
+        }
         
         const formatted = {
           id: appt.id,
           start_at: appt.start_at,
-          claim_claimmd_id: appt.claimid, // Map claimid to expected property name for UI compatibility
+          claim_claimmd_id: appt.claimid || '', // CRITICAL: Map claimid to expected UI property
           insurance_paid_amount: appt.insurance_paid_amount,
           patient_responsibility_amount: appt.patient_responsibility_amount,
           client: {
             id: client?.id || '',
-            name: client ? `${client.client_first_name} ${client.client_last_name}` : 'Unknown',
+            name: client ? `${client.client_first_name || ''} ${client.client_last_name || ''}`.trim() : 'Unknown Client',
             insurance: client?.client_insurance_company_primary || ''
           },
           provider: {
             id: clinician?.id || '',
-            name: clinician ? `${clinician.clinician_first_name} ${clinician.clinician_last_name}` : 'Unknown'
+            name: clinician ? `${clinician.clinician_first_name || ''} ${clinician.clinician_last_name || ''}`.trim() : 'Unknown Provider'
           },
           service: {
             type: 'therapy_session',
@@ -77,20 +96,26 @@ export function useSubmittedClaims() {
           }
         };
         
-        console.log(`Formatted claim ${appt.id}:`, {
-          claimid: appt.claimid,
-          client_name: formatted.client.name,
-          status: formatted.billing.status
-        });
+        console.log('  FORMATTED RESULT:');
+        console.log('    claim_claimmd_id:', formatted.claim_claimmd_id);
+        console.log('    client.name:', formatted.client.name);
+        console.log('    billing.status:', formatted.billing.status);
+        console.log('    billing.amount:', formatted.billing.amount);
         
         return formatted;
-      }) || [];
+      });
 
-      console.log('=== SUBMITTED CLAIMS PROCESSING COMPLETE ===');
-      console.log(`Total formatted claims: ${formattedClaims.length}`);
+      console.log('\n=== FINAL TRANSFORMATION RESULTS ===');
+      console.log(`Total claims formatted: ${formattedClaims.length}`);
+      console.log('Claims with claimid:', formattedClaims.filter(c => c.claim_claimmd_id).length);
+      console.log('Claims with status:', formattedClaims.filter(c => c.billing.status !== 'Unknown').length);
+      console.log('Sample formatted data:', formattedClaims.slice(0, 2));
       
       return formattedClaims;
     },
     refetchOnWindowFocus: false,
+    // FORCE FRESH DATA: Reduce stale time to ensure fresh fetches
+    staleTime: 0,
+    gcTime: 1000 * 60 * 5, // 5 minutes
   });
 }

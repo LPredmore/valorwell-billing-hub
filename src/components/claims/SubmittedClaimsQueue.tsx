@@ -62,26 +62,29 @@ export default function SubmittedClaimsQueue({
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // ENHANCED DEBUGGING: Log detailed information about the component state
-  console.log('=== SUBMITTED CLAIMS QUEUE RENDER ===');
-  console.log('Component props:');
+  // ENHANCED DEBUGGING: Log detailed component state
+  console.log('\n=== SUBMITTED CLAIMS QUEUE COMPONENT RENDER ===');
+  console.log('Props received:');
+  console.log('  appointments count:', appointments?.length || 0);
   console.log('  isLoading:', isLoading);
   console.log('  error:', error);
-  console.log('  appointments received:', appointments?.length || 0);
   console.log('  searchQuery:', searchQuery);
   console.log('  statusFilter:', statusFilter);
   
   if (appointments && appointments.length > 0) {
-    console.log('Sample appointments data:');
-    appointments.slice(0, 3).forEach((appt, idx) => {
+    console.log('\nFirst 2 appointments detail:');
+    appointments.slice(0, 2).forEach((appt, idx) => {
       console.log(`  Appointment ${idx + 1}:`, {
         id: appt.id,
         client_name: appt.client.name,
         claim_id: appt.claim_claimmd_id,
         status: appt.billing.status,
-        amount: appt.billing.amount
+        amount: appt.billing.amount,
+        start_at: appt.start_at
       });
     });
+  } else {
+    console.log('No appointments data to display');
   }
 
   const getStatusBadge = (status: string) => {
@@ -116,27 +119,27 @@ export default function SubmittedClaimsQueue({
     return matchesSearch && matchesStatus;
   }) || [];
 
-  // ENHANCED DEBUGGING: Log filtering results
-  console.log('Filtering results:');
-  console.log('  Before filtering:', appointments?.length || 0);
-  console.log('  After search filter:', filteredAppointments.length);
-  console.log('  Search query:', searchQuery);
-  console.log('  Status filter:', statusFilter);
+  // ENHANCED DEBUGGING: Log filtering process
+  console.log('\nFiltering results:');
+  console.log('  Original count:', appointments?.length || 0);
+  console.log('  After search + status filter:', filteredAppointments.length);
+  console.log('  Search query applied:', searchQuery);
+  console.log('  Status filter applied:', statusFilter);
 
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const displayedAppointments = filteredAppointments.slice(startIndex, endIndex);
   const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
 
-  console.log('Pagination:');
+  console.log('\nPagination details:');
   console.log('  Current page:', currentPage);
   console.log('  Items per page:', itemsPerPage);
-  console.log('  Displayed appointments:', displayedAppointments.length);
   console.log('  Total pages:', totalPages);
+  console.log('  Displayed count:', displayedAppointments.length);
 
   if (error) {
-    console.error('=== ERROR STATE ===');
-    console.error('Error object:', error);
+    console.error('\n=== ERROR STATE DETECTED ===');
+    console.error('Error details:', error);
     return (
       <div className="flex flex-col items-center justify-center p-6 text-center rounded-md bg-destructive/10 border border-destructive/20">
         <h3 className="font-medium text-destructive">Failed to load submitted claims</h3>
@@ -215,21 +218,41 @@ export default function SubmittedClaimsQueue({
                       }
                     </div>
                     
-                    {/* ENHANCED DEBUGGING INFO */}
-                    <div className="text-xs text-muted-foreground space-y-1">
-                      <div>Debug Info:</div>
-                      <div>• Raw appointments: {appointments?.length || 0}</div>
-                      <div>• After filters: {filteredAppointments.length}</div>
-                      <div>• Loading state: {isLoading ? 'true' : 'false'}</div>
-                      <div>• Error state: {error ? 'true' : 'false'}</div>
-                      <div>• Search query: "{searchQuery}"</div>
-                      <div>• Status filter: "{statusFilter}"</div>
+                    {/* COMPREHENSIVE DEBUG INFO */}
+                    <div className="text-xs text-muted-foreground space-y-2 max-w-4xl mx-auto">
+                      <div className="font-medium">Comprehensive Debug Information:</div>
+                      
+                      <div className="grid grid-cols-2 gap-4 text-left">
+                        <div className="space-y-1">
+                          <div className="font-medium">Data Flow:</div>
+                          <div>• Raw appointments: {appointments?.length || 0}</div>
+                          <div>• After filters: {filteredAppointments.length}</div>
+                          <div>• Currently displayed: {displayedAppointments.length}</div>
+                          <div>• Hook loading: {isLoading ? 'YES' : 'NO'}</div>
+                          <div>• Hook error: {error ? 'YES' : 'NO'}</div>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <div className="font-medium">Filter Settings:</div>
+                          <div>• Search: "{searchQuery}"</div>
+                          <div>• Status: "{statusFilter}"</div>
+                          <div>• Page: {currentPage} of {totalPages}</div>
+                          <div>• Items per page: {itemsPerPage}</div>
+                        </div>
+                      </div>
                       
                       {appointments && appointments.length > 0 && (
-                        <div className="mt-2 p-2 bg-gray-50 rounded text-left">
-                          <div className="font-medium">Sample appointment data:</div>
-                          <pre className="text-xs mt-1 overflow-auto">
-                            {JSON.stringify(appointments[0], null, 2).substring(0, 300)}...
+                        <div className="mt-3 p-3 bg-gray-50 rounded text-left">
+                          <div className="font-medium">Sample Raw Data (First Appointment):</div>
+                          <pre className="text-xs mt-1 overflow-auto max-h-32">
+{JSON.stringify({
+  id: appointments[0]?.id,
+  client_name: appointments[0]?.client?.name,
+  claim_id: appointments[0]?.claim_claimmd_id,
+  status: appointments[0]?.billing?.status,
+  amount: appointments[0]?.billing?.amount,
+  start_at: appointments[0]?.start_at
+}, null, 2)}
                           </pre>
                         </div>
                       )}
@@ -238,8 +261,8 @@ export default function SubmittedClaimsQueue({
                 </TableCell>
               </TableRow>
             ) : (
-              displayedAppointments.map((appointment) => {
-                console.log('Rendering appointment row:', {
+              displayedAppointments.map((appointment, index) => {
+                console.log(`Rendering table row ${index + 1}:`, {
                   id: appointment.id,
                   patient: appointment.client.name,
                   claimId: appointment.claim_claimmd_id,
@@ -320,17 +343,20 @@ export default function SubmittedClaimsQueue({
       )}
       
       <div className="text-sm text-muted-foreground">
-        {filteredAppointments.length} submitted claim{filteredAppointments.length !== 1 ? 's' : ''} found
-        {searchQuery && ` (filtered from ${appointments?.length || 0} total)`}
+        <div>
+          {filteredAppointments.length} submitted claim{filteredAppointments.length !== 1 ? 's' : ''} found
+          {searchQuery && ` (filtered from ${appointments?.length || 0} total)`}
+        </div>
         
-        {/* ENHANCED DEBUG SUMMARY */}
-        <div className="mt-2 text-xs space-y-1">
-          <div className="font-medium">Debug Summary:</div>
-          <div>• Hook loading: {isLoading ? 'YES' : 'NO'}</div>
-          <div>• Hook error: {error ? 'YES' : 'NO'}</div>
-          <div>• Raw data count: {appointments?.length || 0}</div>
-          <div>• After filtering: {filteredAppointments.length}</div>
-          <div>• Currently displayed: {displayedAppointments.length}</div>
+        {/* ENHANCED DEBUGGING FOOTER */}
+        <div className="mt-2 text-xs opacity-75 space-y-1">
+          <div className="font-medium">Debug Status:</div>
+          <div className="grid grid-cols-4 gap-2">
+            <div>DB Query: {appointments?.length || 0} records</div>
+            <div>Filtered: {filteredAppointments.length} records</div>
+            <div>Displayed: {displayedAppointments.length} records</div>
+            <div>Loading: {isLoading ? 'YES' : 'NO'}</div>
+          </div>
         </div>
       </div>
     </div>

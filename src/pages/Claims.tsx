@@ -77,8 +77,11 @@ export default function Claims() {
   };
 
   const handleUpdateStatuses = () => {
+    console.log('=== UPDATE STATUSES BUTTON CLICKED ===');
     updateClaimStatuses(undefined, {
       onSuccess: () => {
+        console.log('=== STATUS UPDATE SUCCESS - REFRESHING DATA ===');
+        // FORCE REFRESH: Explicitly refetch both queries
         refetchBillable();
         refetchSubmitted();
       }
@@ -95,9 +98,17 @@ export default function Claims() {
   };
 
   const handleRefresh = () => {
+    console.log('=== MANUAL REFRESH BUTTON CLICKED ===');
     refetchBillable();
     refetchSubmitted();
   };
+
+  // ENHANCED DEBUG: Log component state
+  console.log('=== CLAIMS PAGE RENDER ===');
+  console.log('Active tab:', activeTab);
+  console.log('Submitted claims count:', submittedClaims?.length || 0);
+  console.log('Is loading submitted:', isLoadingSubmitted);
+  console.log('Submitted error:', submittedError);
 
   return (
     <div className="p-6 space-y-6">

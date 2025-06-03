@@ -82,7 +82,7 @@ export function useClaimHistory(appointmentId: string) {
 }
 
 /**
- * Hook to fetch claim status updates
+ * Hook to fetch claim status updates - FIXED CACHE INVALIDATION
  */
 export function useClaimStatusUpdates() {
   const queryClient = useQueryClient();
@@ -90,13 +90,27 @@ export function useClaimStatusUpdates() {
   return useMutation({
     mutationFn: () => claimsService.getClaimResponses(),
     onSuccess: (data) => {
+      console.log('=== CLAIM STATUS UPDATE SUCCESS ===');
+      console.log('Updated count:', data.updatedCount);
+      
+      // CRITICAL FIX: Invalidate multiple related query keys
+      queryClient.invalidateQueries({ queryKey: ['submittedClaims'] });
       queryClient.invalidateQueries({ queryKey: ['billableAppointments'] });
+      
+      // FORCE REFETCH: Also explicitly refetch submitted claims
+      queryClient.refetchQueries({ queryKey: ['submittedClaims'] });
+      
+      console.log('Cache invalidation completed for submittedClaims and billableAppointments');
+      
       toast({
         title: "Claim statuses updated",
         description: `Retrieved ${data.updatedCount} status updates`,
       });
     },
     onError: (error) => {
+      console.error('=== CLAIM STATUS UPDATE ERROR ===');
+      console.error('Error:', error);
+      
       toast({
         variant: "destructive",
         title: "Failed to update claim statuses",
