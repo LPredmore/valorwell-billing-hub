@@ -448,7 +448,7 @@ const InsuranceVerification = () => {
     if (isObjectWithProperty<{request_payload: any}>(client?.eligibility_response_details_primary_json, 'request_payload')) {
       const payload = client.eligibility_response_details_primary_json.request_payload;
       return {
-        policyNumber: payload.ins_id,
+        policyNumber: payload.ins_number,
         insuranceName: payload.ins_name,
         subscriberName: `${payload.ins_name_f} ${payload.ins_name_l}`,
         payerId: payload.payerid,
@@ -573,7 +573,7 @@ const InsuranceVerification = () => {
       lastName: elig.ins_name_l,
       dob: elig.ins_dob ? formatApiDate(elig.ins_dob) : null,
       gender: elig.ins_sex,
-      policyNumber: elig.ins_number || elig.ins_id,
+      policyNumber: elig.ins_number,
     };
   };
 
