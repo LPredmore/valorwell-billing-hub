@@ -1,4 +1,3 @@
-
 // Edge function for checking insurance eligibility through Claim.MD API
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -23,35 +22,35 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
-  
+
   try {
     // Only accept POST requests
     if (req.method !== 'POST') {
-      return new Response(JSON.stringify({ error: 'Method not allowed' }), { 
+      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
         status: 405,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-    
+
     // Parse the request body
     const { clientId } = await req.json();
-    
+
     if (!clientId) {
       return new Response(JSON.stringify({ error: 'Client ID is required' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-    
+
     console.log(`Checking eligibility for client: ${clientId}`);
-    
+
     // Get client information
     const { data: clientData, error: clientError } = await supabase
       .from('clients')
       .select('*')
       .eq('id', clientId)
       .single();
-      
+
     if (clientError || !clientData) {
       console.error('Error fetching client data:', clientError);
       return new Response(JSON.stringify({ error: 'Client not found' }), {
@@ -59,13 +58,13 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-    
+
     // Get practice information
     const { data: practiceData, error: practiceError } = await supabase
       .from('practiceinfo')
       .select('*')
       .single();
-      
+
     if (practiceError || !practiceData) {
       console.error('Error fetching practice data:', practiceError);
       return new Response(JSON.stringify({ error: 'Practice information not found' }), {
@@ -73,10 +72,10 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-    
+
     // Validate required client insurance information
     if (!clientData.client_policy_number_primary || !clientData.client_insurance_company_primary) {
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         error: 'Missing required client insurance information',
         details: 'Policy number and insurance company are required for eligibility checks'
       }), {
@@ -84,7 +83,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-    
+
     // Log environment variable key (masked) to verify it's available
     const apiKeyEnv = Deno.env.get('CLAIMMD_API_KEY');
     if (!apiKeyEnv) {
@@ -96,12 +95,12 @@ serve(async (req) => {
     } else {
       // Log just the first 4 and last 4 characters for verification purposes
       const keyLength = apiKeyEnv.length;
-      const maskedKey = keyLength > 8 ? 
-        `${apiKeyEnv.substring(0, 4)}...${apiKeyEnv.substring(keyLength - 4)}` : 
+      const maskedKey = keyLength > 8 ?
+        `${apiKeyEnv.substring(0, 4)}...${apiKeyEnv.substring(keyLength - 4)}` :
         '********';
       console.log(`CLAIMMD_API_KEY environment variable is set (masked: ${maskedKey}), length: ${keyLength} chars`);
     }
-    
+
     // Log raw client data before transformation
     console.log('Raw client data for eligibility check:', {
       clientId: clientId,
@@ -118,10 +117,10 @@ serve(async (req) => {
 
     // Format data properly for Claim.MD API using our formatter
     const eligibilityPayload = formatEligibilityPayload(clientData, practiceData);
-    
+
     // Log transformed data for verification
     console.log('Transformed payload for Claim.MD:', {
-      ins_id: eligibilityPayload.ins_id,
+      ins_number: eligibilityPayload.ins_number,
       ins_name_f: eligibilityPayload.ins_name_f,
       ins_name_l: eligibilityPayload.ins_name_l,
       ins_dob: eligibilityPayload.ins_dob,
@@ -131,32 +130,32 @@ serve(async (req) => {
       tdos: eligibilityPayload.tdos,
       payerid: eligibilityPayload.payerid
     });
-    
+
     // Call Claim.MD API for eligibility check
     const eligibilityResponse = await callClaimMdApi(
       'eligdata/', // Using the correct endpoint
       eligibilityPayload,
       clientId
     );
-    
+
     // IMPORTANT: Properly check for errors in the API response
     if (!eligibilityResponse.success) {
       const errorDetails = eligibilityResponse.error || 'Unknown API error';
       console.error('Eligibility check failed:', errorDetails);
-      
+
       // Extract error code if available
       const errorCode = eligibilityResponse.data?.error?.error_code;
       const errorMsg = eligibilityResponse.data?.error?.error_mesg;
       const interpretedError = errorCode ? getClaimMdErrorMessage(errorCode) : 'Unknown API error';
       const formattedErrorDetails = `${errorMsg || interpretedError} (Code: ${errorCode || 'unknown'})`;
-      
+
       // Update client record with specific error information
       await supabase
         .from('clients')
         .update({
           eligibility_status_primary: 'Error',
           eligibility_last_checked_primary: new Date().toISOString(),
-          eligibility_response_details_primary_json: { 
+          eligibility_response_details_primary_json: {
             error: formattedErrorDetails,
             timestamp: new Date().toISOString(),
             requestId: eligibilityPayload.request_id,
@@ -164,9 +163,9 @@ serve(async (req) => {
           }
         })
         .eq('id', clientId);
-        
-      return new Response(JSON.stringify({ 
-        error: 'Eligibility check failed', 
+
+      return new Response(JSON.stringify({
+        error: 'Eligibility check failed',
         details: formattedErrorDetails,
         errorCode: errorCode || 'unknown',
         userMessage: interpretedError
@@ -175,41 +174,41 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-    
+
     // Process the eligibility response
     const result = eligibilityResponse.data;
     console.log('Raw eligibility response:', JSON.stringify(result));
-    
+
     // Safety check - ensure we have valid data
     if (!result || typeof result !== 'object') {
       console.error('Invalid eligibility response format:', result);
-      
+
       await supabase
         .from('clients')
         .update({
           eligibility_status_primary: 'Error',
           eligibility_last_checked_primary: new Date().toISOString(),
-          eligibility_response_details_primary_json: { 
+          eligibility_response_details_primary_json: {
             error: 'Invalid response format',
             rawResponse: result
           }
         })
         .eq('id', clientId);
-        
-      return new Response(JSON.stringify({ 
-        error: 'Invalid eligibility response format', 
+
+      return new Response(JSON.stringify({
+        error: 'Invalid eligibility response format',
         details: 'The API returned data in an unexpected format'
       }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-    
+
     // Use our new helper function to determine eligibility status and extract benefit details
     const { status: finalStatus, copay, deductible, coinsurancePercent } = determineEligibilityStatus(result);
-    
+
     console.log(`Extracted eligibility status: ${finalStatus}`);
-    
+
     // Update client record with eligibility information
     const { error: updateError } = await supabase
       .from('clients')
@@ -228,11 +227,11 @@ serve(async (req) => {
         eligibility_claimmd_id_primary: result.id || (result.elig && result.elig.eligid) || null
       })
       .eq('id', clientId);
-      
+
     if (updateError) {
       console.error('Error updating client with eligibility data:', updateError);
     }
-    
+
     // Return the eligibility results with more detailed information
     return new Response(JSON.stringify({
       success: true,
@@ -253,12 +252,12 @@ serve(async (req) => {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
-    
+
   } catch (error) {
     console.error('Error processing eligibility request:', error);
-    
-    return new Response(JSON.stringify({ 
-      error: 'Internal server error', 
+
+    return new Response(JSON.stringify({
+      error: 'Internal server error',
       details: error instanceof Error ? error.message : String(error)
     }), {
       status: 500,
