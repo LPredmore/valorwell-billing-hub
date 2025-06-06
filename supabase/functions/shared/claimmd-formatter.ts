@@ -1,4 +1,3 @@
-
 // Utility functions for formatting data according to Claim.MD's API requirements
 
 /**
@@ -20,7 +19,6 @@ interface ClaimMdResponse {
     ins_dob?: string;
     ins_sex?: string;
     ins_number?: string;
-    ins_id?: string;
     [key: string]: any;
   };
   error?: string | {error_code?: string; error_mesg?: string; [key: string]: any};
@@ -91,14 +89,14 @@ export function formatEligibilityPayload(
     prov_taxid: practiceData.practice_taxid || '',
     prov_lname: practiceData.practice_name || '',
     prov_fname: "",
-    prov_addr1: practiceData.practice_address1 || '',
-    prov_addr2: practiceData.practice_address2 || "",
+    prov_addr_1: practiceData.practice_address1 || '',
+    prov_addr_2: practiceData.practice_address2 || "",
     prov_city: practiceData.practice_city || '',
     prov_state: practiceData.practice_state || '',
     prov_zip: practiceData.practice_zip || '',
     
     // Subscriber information (always required)
-    ins_id: clientData.client_policy_number_primary || '',
+    ins_number: clientData.client_policy_number_primary || '',
     ins_name_l: isSelf ? (clientData.client_last_name || '') : (subscriberLastName || ''),
     ins_name_f: isSelf ? (clientData.client_first_name || '') : (subscriberFirstName || ''),
     ins_dob: formatClaimMdDate(isSelf ? clientData.client_date_of_birth : clientData.client_subscriber_dob_primary) || '',
