@@ -1,4 +1,3 @@
-
 // Edge function to retrieve claim status updates from Claim.MD
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
@@ -25,12 +24,12 @@ async function forceResetResponseId(): Promise<void> {
     console.log('=== FORCE RESETTING ResponseID to 0 ===');
     const { error } = await supabase
       .from('system_settings')
-      .upsert({ 
-        key: LAST_RESPONSE_ID_KEY, 
+      .upsert({
+        key: LAST_RESPONSE_ID_KEY,
         value: '0',
         updated_at: new Date().toISOString()
       });
-    
+
     if (error) {
       console.error('ERROR: Failed to force reset ResponseID:', error);
     } else {
@@ -49,12 +48,12 @@ async function getLastResponseId(): Promise<number> {
       .select('value')
       .eq('key', LAST_RESPONSE_ID_KEY)
       .single();
-    
+
     if (error || !data) {
       console.log('No last response ID found, using default of 0');
       return 0;
     }
-    
+
     const responseId = parseInt(data.value, 10) || 0;
     console.log(`Retrieved last response ID from settings: ${responseId}`);
     return responseId;
@@ -72,12 +71,12 @@ async function getLastSuccessfulCheck(): Promise<string | null> {
       .select('value')
       .eq('key', LAST_SUCCESSFUL_CHECK_KEY)
       .single();
-    
+
     if (error || !data) {
       console.log('No last successful check timestamp found');
       return null;
     }
-    
+
     console.log(`Last successful check: ${data.value}`);
     return data.value;
   } catch (err) {
@@ -92,12 +91,12 @@ async function updateLastResponseId(responseId: number): Promise<void> {
     console.log(`Updating last response ID to: ${responseId}`);
     const { error } = await supabase
       .from('system_settings')
-      .upsert({ 
-        key: LAST_RESPONSE_ID_KEY, 
+      .upsert({
+        key: LAST_RESPONSE_ID_KEY,
         value: responseId.toString(),
         updated_at: new Date().toISOString()
       });
-    
+
     if (error) {
       console.error('Error updating last response ID:', error);
     } else {
@@ -113,15 +112,15 @@ async function updateLastSuccessfulCheck(): Promise<void> {
   try {
     const timestamp = new Date().toISOString();
     console.log(`Updating last successful check to: ${timestamp}`);
-    
+
     const { error } = await supabase
       .from('system_settings')
-      .upsert({ 
-        key: LAST_SUCCESSFUL_CHECK_KEY, 
+      .upsert({
+        key: LAST_SUCCESSFUL_CHECK_KEY,
         value: timestamp,
         updated_at: new Date().toISOString()
       });
-    
+
     if (error) {
       console.error('Error updating last successful check:', error);
     } else {
@@ -138,40 +137,50 @@ async function updateAppointmentClaimStatus(claimId: string, status: string, res
     console.log(`=== UPDATING CLAIM STATUS ===`);
     console.log(`  Claim ID: ${claimId}`);
     console.log(`  New Status: ${status}`);
-    
+
     // Query using the correct field name 'claimid'
     const { data: appointments, error: queryError } = await supabase
       .from('appointments')
       .select('id')
       .eq('claimid', claimId);
-    
+
     if (queryError) {
       console.error(`ERROR querying appointments for claim ID ${claimId}:`, queryError);
       return;
     }
-    
+
     console.log(`  Query result: Found ${appointments?.length || 0} appointments`);
-    
+
     if (!appointments || appointments.length === 0) {
       console.log(`  WARNING: No appointment found with claim ID ${claimId}`);
       return;
     }
-    
+
     const appointmentId = appointments[0].id;
     console.log(`  Found appointment ${appointmentId} for claim ${claimId}`);
-    
+
     const { error: updateError } = await supabase
       .from('appointments')
       .update({
         claim_status: status,
         claim_status_last_checked: new Date().toISOString(),
         claim_response_json: responseData,
-        requires_billing_review: status.toLowerCase().includes('reject') || 
-                                status.toLowerCase().includes('denied') || 
+        requires_billing_review: status.toLowerCase().includes('reject') ||
+                                status.toLowerCase().includes('denied') ||
                                 status.toLowerCase().includes('error')
       })
       .eq('id', appointmentId);
-    
+
+    // Update CMS1500_claims table if entry exists
+    const { error: cmsError } = await supabase
+      .from('CMS1500_claims')
+      .update({
+        status,
+        last_status_check: new Date().toISOString(),
+        response_json: responseData
+      })
+      .eq('claim_md_id', claimId);
+
     if (updateError) {
       console.error(`ERROR updating appointment ${appointmentId} status:`, updateError);
     } else {
@@ -188,10 +197,10 @@ function isRecentResponse(responseData: any, lastSuccessfulCheck: string | null)
     console.log('No last check timestamp - processing all responses');
     return true;
   }
-  
+
   const lastCheckDate = new Date(lastSuccessfulCheck);
   const cutoffDate = new Date(lastCheckDate.getTime() - (24 * 60 * 60 * 1000)); // 24 hours before last check
-  
+
   // Try to extract timestamp from response data
   if (responseData.timestamp) {
     const responseDate = new Date(responseData.timestamp);
@@ -199,14 +208,14 @@ function isRecentResponse(responseData: any, lastSuccessfulCheck: string | null)
     console.log(`Response timestamp: ${responseData.timestamp}, Recent: ${isRecent}`);
     return isRecent;
   }
-  
+
   if (responseData.date) {
     const responseDate = new Date(responseData.date);
     const isRecent = responseDate > cutoffDate;
     console.log(`Response date: ${responseData.date}, Recent: ${isRecent}`);
     return isRecent;
   }
-  
+
   console.log('Could not determine response date - processing anyway');
   return true;
 }
@@ -214,27 +223,27 @@ function isRecentResponse(responseData: any, lastSuccessfulCheck: string | null)
 // Process response data and update appointments
 async function processResponseData(responseData: any, lastSuccessfulCheck: string | null): Promise<{ updatedCount: number }> {
   let updatedCount = 0;
-  
+
   console.log('=== PROCESSING RESPONSE DATA ===');
   console.log('Full response structure:', JSON.stringify(responseData, null, 2));
-  
+
   if (!responseData) {
     console.log('No response data to process');
     return { updatedCount };
   }
-  
+
   // Check if this response is recent enough to process
   if (!isRecentResponse(responseData, lastSuccessfulCheck)) {
     console.log('Response is too old, skipping processing');
     return { updatedCount };
   }
-  
+
   // Check different possible response structures
   const claims = responseData.claims || responseData.claim || [];
   console.log(`Found ${Array.isArray(claims) ? claims.length : 'non-array'} claims in response`);
   console.log('Claims data type:', typeof claims);
   console.log('Claims data:', JSON.stringify(claims, null, 2));
-  
+
   if (!Array.isArray(claims)) {
     console.log('Claims data is not an array - checking if single claim object');
     if (claims && typeof claims === 'object' && claims.claimid) {
@@ -244,23 +253,23 @@ async function processResponseData(responseData: any, lastSuccessfulCheck: strin
     console.log('No valid claims structure found');
     return { updatedCount };
   }
-  
+
   for (const claim of claims) {
     console.log(`=== PROCESSING INDIVIDUAL CLAIM ===`);
     console.log('Claim object:', JSON.stringify(claim, null, 2));
-    
+
     // Only use claimid field
     if (!claim.claimid) {
       console.log('Skipping claim without claimid:', claim);
       continue;
     }
-    
+
     const claimId = claim.claimid;
     console.log(`Processing claim: ${claimId}`);
-    
+
     // Extract status from the claim response
     let status = 'Status Update Received';
-    
+
     // Determine status based on common response patterns
     if (claim.status) {
       status = claim.status;
@@ -278,14 +287,14 @@ async function processResponseData(responseData: any, lastSuccessfulCheck: strin
         status = `Rejected - ${rejectionMessages.length} error(s)`;
       }
     }
-    
+
     console.log(`Determined status for claim ${claimId}: ${status}`);
-    
+
     // Update the appointment with the claim status
     await updateAppointmentClaimStatus(claimId, status, claim);
     updatedCount++;
   }
-  
+
   console.log(`=== PROCESSING COMPLETE ===`);
   console.log(`Total claims processed: ${updatedCount}`);
   return { updatedCount };
@@ -297,7 +306,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
-  
+
   try {
     // Only allow POST requests for claim response retrieval
     if (req.method !== 'POST') {
@@ -306,37 +315,37 @@ Deno.serve(async (req: Request) => {
         { headers: { 'Content-Type': 'application/json', ...corsHeaders }, status: 405 }
       );
     }
-    
+
     console.log('=== CLAIM RESPONSE RETRIEVAL STARTED ===');
-    
+
     // FORCE RESET ResponseID to 0 for debugging
     await forceResetResponseId();
-    
+
     // Get the current last response ID and last successful check
     const lastResponseId = await getLastResponseId();
     const lastSuccessfulCheck = await getLastSuccessfulCheck();
-    
+
     console.log(`Starting claim response retrieval with ResponseID: ${lastResponseId}`);
     console.log(`Last successful check: ${lastSuccessfulCheck || 'Never'}`);
-    
+
     // Call Claim.MD API with the ResponseID
     console.log(`=== CALLING CLAIM.MD API ===`);
     const result = await callClaimMdApi(
-      'response', 
+      'response',
       { ResponseID: lastResponseId },
       null
     );
-    
+
     console.log(`API call result - Success: ${result.success}`);
-    
+
     if (!result.success) {
       console.error('=== API CALL FAILED ===');
       console.error('Error details:', result.error);
-      
+
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Failed to retrieve claim responses', 
+        JSON.stringify({
+          success: false,
+          error: 'Failed to retrieve claim responses',
           details: result.error,
           debugInfo: {
             lastResponseId: lastResponseId,
@@ -346,14 +355,14 @@ Deno.serve(async (req: Request) => {
         { headers: { 'Content-Type': 'application/json', ...corsHeaders }, status: 500 }
       );
     }
-    
+
     const responseData = result.data;
     console.log('=== API CALL SUCCESSFUL ===');
     console.log('Response data received:', JSON.stringify(responseData, null, 2));
-    
+
     // Process the response data to update appointment statuses
     const { updatedCount } = await processResponseData(responseData, lastSuccessfulCheck);
-    
+
     // Update the last response ID if provided in the API response
     let newLastResponseId = lastResponseId;
     if (responseData && responseData.last_responseid) {
@@ -366,30 +375,30 @@ Deno.serve(async (req: Request) => {
         console.log(`Incrementing ResponseID to: ${newLastResponseId}`);
       }
     }
-    
+
     // Update the stored ResponseID if we processed claims or got a new one
     if (updatedCount > 0 || newLastResponseId !== lastResponseId) {
       await updateLastResponseId(newLastResponseId);
     }
-    
+
     // Update the last successful check timestamp if we processed any claims
     if (updatedCount > 0) {
       await updateLastSuccessfulCheck();
     }
-    
-    const message = updatedCount > 0 
+
+    const message = updatedCount > 0
       ? `Successfully retrieved and processed ${updatedCount} claim status updates`
       : 'No new claim status updates found';
-    
+
     console.log('=== FINAL RESULT ===');
     console.log(message);
     console.log(`Original ResponseID: ${lastResponseId}`);
     console.log(`New ResponseID: ${newLastResponseId}`);
     console.log(`Claims updated: ${updatedCount}`);
-    
+
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         updatedCount,
         lastResponseId: newLastResponseId,
         message,
@@ -403,15 +412,15 @@ Deno.serve(async (req: Request) => {
       }),
       { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     );
-    
+
   } catch (err) {
     console.error('=== UNEXPECTED ERROR ===');
     console.error('Error message:', err.message);
     console.error('Error stack:', err.stack);
-    
+
     return new Response(
-      JSON.stringify({ 
-        success: false, 
+      JSON.stringify({
+        success: false,
         error: err.message,
         stack: err.stack
       }),
