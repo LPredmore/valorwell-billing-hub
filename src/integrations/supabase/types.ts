@@ -86,6 +86,51 @@ export type Database = {
           },
         ]
       }
+      appointment_sync_mapping: {
+        Row: {
+          appointment_id: string
+          created_at: string | null
+          id: string
+          last_synced_at: string | null
+          nylas_calendar_id: string
+          nylas_event_id: string
+          sync_status: string | null
+        }
+        Insert: {
+          appointment_id: string
+          created_at?: string | null
+          id?: string
+          last_synced_at?: string | null
+          nylas_calendar_id: string
+          nylas_event_id: string
+          sync_status?: string | null
+        }
+        Update: {
+          appointment_id?: string
+          created_at?: string | null
+          id?: string
+          last_synced_at?: string | null
+          nylas_calendar_id?: string
+          nylas_event_id?: string
+          sync_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointment_sync_mapping_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointment_sync_mapping_nylas_calendar_id_fkey"
+            columns: ["nylas_calendar_id"]
+            isOneToOne: false
+            referencedRelation: "nylas_calendars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointment_templates: {
         Row: {
           color: string | null
@@ -395,6 +440,60 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      calendar_sync_logs: {
+        Row: {
+          appointment_id: string | null
+          connection_id: string
+          created_at: string | null
+          error_message: string | null
+          external_event_id: string | null
+          id: string
+          operation: string
+          status: string
+          sync_data: Json | null
+          sync_type: string
+        }
+        Insert: {
+          appointment_id?: string | null
+          connection_id: string
+          created_at?: string | null
+          error_message?: string | null
+          external_event_id?: string | null
+          id?: string
+          operation: string
+          status?: string
+          sync_data?: Json | null
+          sync_type: string
+        }
+        Update: {
+          appointment_id?: string | null
+          connection_id?: string
+          created_at?: string | null
+          error_message?: string | null
+          external_event_id?: string | null
+          id?: string
+          operation?: string
+          status?: string
+          sync_data?: Json | null
+          sync_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_sync_logs_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_sync_logs_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "nylas_connections"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       client_history: {
         Row: {
@@ -1474,370 +1573,229 @@ export type Database = {
         }
         Relationships: []
       }
-      cms1500_claims: {
+      CMS1500_claims: {
         Row: {
-          accept_assign: string | null
-          amount_paid: number | null
-          auto_accident: string | null
-          auto_accident_state: string | null
-          balance_due: number | null
-          charge: number | null
-          chg_prior_auth: string | null
-          chg_supv_prov_name_l: string | null
-          chiro_manifest_date: string | null
-          clia_number: string | null
-          client_id: string
-          cond_code_1: string | null
-          cond_code_2: string | null
-          cond_code_3: string | null
+          accept_assign: string
+          appointment_id: string | null
+          bill_addr_1: string
+          bill_addr_2: string | null
+          bill_city: string
+          bill_name: string
+          bill_npi: string
+          bill_state: string
+          bill_taxid: string
+          bill_taxid_type: string
+          bill_taxonomy: string
+          bill_zip: string
+          charge: number
+          claim_md_batch_id: string | null
+          claim_md_id: string | null
           created_at: string | null
           diag_1: string | null
-          diag_ref: string | null
-          emergency_indicator: string | null
-          epsdt_indicator: string | null
-          facility_addr_1: string | null
-          facility_addr_2: string | null
-          facility_city: string | null
-          facility_name: string | null
-          facility_state: string | null
-          facility_zip: string | null
-          from_date: string | null
-          icn_dcn_1: string | null
+          diag_10: string | null
+          diag_11: string | null
+          diag_12: string | null
+          diag_2: string | null
+          diag_3: string | null
+          diag_4: string | null
+          diag_5: string | null
+          diag_6: string | null
+          diag_7: string | null
+          diag_8: string | null
+          diag_9: string | null
+          diag_ref: string
+          from_date: string
           id: string
-          ins_addr_2: string | null
-          ins_city: string | null
-          ins_country: string | null
-          ins_dob: string | null
-          ins_employer: string | null
+          ins_addr_1: string
+          ins_city: string
+          ins_dob: string
           ins_group: string | null
-          ins_name_f: string | null
-          ins_name_l: string | null
-          ins_name_m: string | null
-          ins_number: string | null
-          ins_phone: string | null
-          ins_plan: string | null
-          ins_sex: string | null
-          ins_state: string | null
-          ins_zip: string | null
-          lastseen_date: string | null
-          mod1: string | null
-          mod2: string | null
-          mod3: string | null
-          mod4: string | null
-          narrative: string | null
-          nowork_from_date: string | null
-          onset_date: string | null
-          ord_prov_addr_1: string | null
-          ord_prov_addr_2: string | null
-          ord_prov_city: string | null
-          ord_prov_name_f: string | null
-          ord_prov_name_l: string | null
-          ord_prov_name_m: string | null
-          ord_prov_npi: string | null
-          ord_prov_state: string | null
-          ord_prov_zip: string | null
-          other_accident: string | null
-          other_claimfilingcode: string | null
-          other_ins_dob: string | null
-          other_ins_group: string | null
-          other_ins_medicare_code: string | null
-          other_ins_name_f: string | null
-          other_ins_name_l: string | null
-          other_ins_name_m: string | null
-          other_ins_number: string | null
-          other_ins_payment_date: string | null
-          other_ins_sex: string | null
-          other_pat_rel: string | null
-          other_payer_addr_1: string | null
-          other_payer_addr_2: string | null
-          other_payer_city: string | null
-          other_payer_name: string | null
-          other_payer_state: string | null
-          other_payer_zip: string | null
-          other_payerid: string | null
-          pat_city: string | null
-          pat_country: string | null
-          pat_dob: string | null
-          pat_marital: string | null
-          pat_name_f: string | null
-          pat_name_l: string | null
-          pat_name_m: string | null
-          pat_phone: string | null
-          pat_rel: string | null
-          pat_sex: string | null
-          pat_state: string | null
-          pat_zip: string | null
-          payer_addr_1: string | null
-          payer_addr_2: string | null
-          payer_city: string | null
-          payer_name: string | null
-          payer_state: string | null
-          payer_zip: string | null
-          payerid: string | null
-          pcn: string | null
-          place_of_service: string | null
-          primary_paid_amount_2: number | null
-          primary_paid_date: string | null
-          prior_auth: string | null
-          proc_code: string | null
-          prov_id: string | null
-          prov_npi: string | null
+          ins_name_f: string
+          ins_name_l: string
+          ins_number: string
+          ins_state: string
+          ins_zip: string
+          last_status_check: string | null
+          last_submission: string | null
+          mod_1: string | null
+          mod_2: string | null
+          mod_3: string | null
+          mod_4: string | null
+          pat_addr_1: string
+          pat_city: string
+          pat_dob: string
+          pat_name_f: string
+          pat_name_l: string
+          pat_rel: string
+          pat_sex: string
+          pat_state: string
+          pat_zip: string
+          payerid: string
+          pcn: string
+          place_of_service: string
+          proc_code: string
+          prov_name_f: string
+          prov_name_l: string
+          prov_npi: string
           prov_taxonomy: string | null
-          ref_id: string | null
-          ref_name_f: string | null
-          ref_name_l: string | null
-          ref_name_m: string | null
-          ref_npi: string | null
-          referral_number: string | null
-          stripe_customer_id: string | null
-          thru_date: string | null
-          total_charge: number | null
+          remote_claimid: string
+          response_json: Json | null
+          status: string | null
+          thru_date: string
+          total_charge: number
+          units: number
           updated_at: string | null
         }
         Insert: {
-          accept_assign?: string | null
-          amount_paid?: number | null
-          auto_accident?: string | null
-          auto_accident_state?: string | null
-          balance_due?: number | null
-          charge?: number | null
-          chg_prior_auth?: string | null
-          chg_supv_prov_name_l?: string | null
-          chiro_manifest_date?: string | null
-          clia_number?: string | null
-          client_id: string
-          cond_code_1?: string | null
-          cond_code_2?: string | null
-          cond_code_3?: string | null
+          accept_assign?: string
+          appointment_id?: string | null
+          bill_addr_1: string
+          bill_addr_2?: string | null
+          bill_city: string
+          bill_name: string
+          bill_npi: string
+          bill_state: string
+          bill_taxid: string
+          bill_taxid_type: string
+          bill_taxonomy: string
+          bill_zip: string
+          charge: number
+          claim_md_batch_id?: string | null
+          claim_md_id?: string | null
           created_at?: string | null
           diag_1?: string | null
-          diag_ref?: string | null
-          emergency_indicator?: string | null
-          epsdt_indicator?: string | null
-          facility_addr_1?: string | null
-          facility_addr_2?: string | null
-          facility_city?: string | null
-          facility_name?: string | null
-          facility_state?: string | null
-          facility_zip?: string | null
-          from_date?: string | null
-          icn_dcn_1?: string | null
+          diag_10?: string | null
+          diag_11?: string | null
+          diag_12?: string | null
+          diag_2?: string | null
+          diag_3?: string | null
+          diag_4?: string | null
+          diag_5?: string | null
+          diag_6?: string | null
+          diag_7?: string | null
+          diag_8?: string | null
+          diag_9?: string | null
+          diag_ref: string
+          from_date: string
           id?: string
-          ins_addr_2?: string | null
-          ins_city?: string | null
-          ins_country?: string | null
-          ins_dob?: string | null
-          ins_employer?: string | null
+          ins_addr_1: string
+          ins_city: string
+          ins_dob: string
           ins_group?: string | null
-          ins_name_f?: string | null
-          ins_name_l?: string | null
-          ins_name_m?: string | null
-          ins_number?: string | null
-          ins_phone?: string | null
-          ins_plan?: string | null
-          ins_sex?: string | null
-          ins_state?: string | null
-          ins_zip?: string | null
-          lastseen_date?: string | null
-          mod1?: string | null
-          mod2?: string | null
-          mod3?: string | null
-          mod4?: string | null
-          narrative?: string | null
-          nowork_from_date?: string | null
-          onset_date?: string | null
-          ord_prov_addr_1?: string | null
-          ord_prov_addr_2?: string | null
-          ord_prov_city?: string | null
-          ord_prov_name_f?: string | null
-          ord_prov_name_l?: string | null
-          ord_prov_name_m?: string | null
-          ord_prov_npi?: string | null
-          ord_prov_state?: string | null
-          ord_prov_zip?: string | null
-          other_accident?: string | null
-          other_claimfilingcode?: string | null
-          other_ins_dob?: string | null
-          other_ins_group?: string | null
-          other_ins_medicare_code?: string | null
-          other_ins_name_f?: string | null
-          other_ins_name_l?: string | null
-          other_ins_name_m?: string | null
-          other_ins_number?: string | null
-          other_ins_payment_date?: string | null
-          other_ins_sex?: string | null
-          other_pat_rel?: string | null
-          other_payer_addr_1?: string | null
-          other_payer_addr_2?: string | null
-          other_payer_city?: string | null
-          other_payer_name?: string | null
-          other_payer_state?: string | null
-          other_payer_zip?: string | null
-          other_payerid?: string | null
-          pat_city?: string | null
-          pat_country?: string | null
-          pat_dob?: string | null
-          pat_marital?: string | null
-          pat_name_f?: string | null
-          pat_name_l?: string | null
-          pat_name_m?: string | null
-          pat_phone?: string | null
-          pat_rel?: string | null
-          pat_sex?: string | null
-          pat_state?: string | null
-          pat_zip?: string | null
-          payer_addr_1?: string | null
-          payer_addr_2?: string | null
-          payer_city?: string | null
-          payer_name?: string | null
-          payer_state?: string | null
-          payer_zip?: string | null
-          payerid?: string | null
-          pcn?: string | null
-          place_of_service?: string | null
-          primary_paid_amount_2?: number | null
-          primary_paid_date?: string | null
-          prior_auth?: string | null
-          proc_code?: string | null
-          prov_id?: string | null
-          prov_npi?: string | null
+          ins_name_f: string
+          ins_name_l: string
+          ins_number: string
+          ins_state: string
+          ins_zip: string
+          last_status_check?: string | null
+          last_submission?: string | null
+          mod_1?: string | null
+          mod_2?: string | null
+          mod_3?: string | null
+          mod_4?: string | null
+          pat_addr_1: string
+          pat_city: string
+          pat_dob: string
+          pat_name_f: string
+          pat_name_l: string
+          pat_rel: string
+          pat_sex: string
+          pat_state: string
+          pat_zip: string
+          payerid: string
+          pcn: string
+          place_of_service: string
+          proc_code: string
+          prov_name_f: string
+          prov_name_l: string
+          prov_npi: string
           prov_taxonomy?: string | null
-          ref_id?: string | null
-          ref_name_f?: string | null
-          ref_name_l?: string | null
-          ref_name_m?: string | null
-          ref_npi?: string | null
-          referral_number?: string | null
-          stripe_customer_id?: string | null
-          thru_date?: string | null
-          total_charge?: number | null
+          remote_claimid: string
+          response_json?: Json | null
+          status?: string | null
+          thru_date: string
+          total_charge: number
+          units?: number
           updated_at?: string | null
         }
         Update: {
-          accept_assign?: string | null
-          amount_paid?: number | null
-          auto_accident?: string | null
-          auto_accident_state?: string | null
-          balance_due?: number | null
-          charge?: number | null
-          chg_prior_auth?: string | null
-          chg_supv_prov_name_l?: string | null
-          chiro_manifest_date?: string | null
-          clia_number?: string | null
-          client_id?: string
-          cond_code_1?: string | null
-          cond_code_2?: string | null
-          cond_code_3?: string | null
+          accept_assign?: string
+          appointment_id?: string | null
+          bill_addr_1?: string
+          bill_addr_2?: string | null
+          bill_city?: string
+          bill_name?: string
+          bill_npi?: string
+          bill_state?: string
+          bill_taxid?: string
+          bill_taxid_type?: string
+          bill_taxonomy?: string
+          bill_zip?: string
+          charge?: number
+          claim_md_batch_id?: string | null
+          claim_md_id?: string | null
           created_at?: string | null
           diag_1?: string | null
-          diag_ref?: string | null
-          emergency_indicator?: string | null
-          epsdt_indicator?: string | null
-          facility_addr_1?: string | null
-          facility_addr_2?: string | null
-          facility_city?: string | null
-          facility_name?: string | null
-          facility_state?: string | null
-          facility_zip?: string | null
-          from_date?: string | null
-          icn_dcn_1?: string | null
+          diag_10?: string | null
+          diag_11?: string | null
+          diag_12?: string | null
+          diag_2?: string | null
+          diag_3?: string | null
+          diag_4?: string | null
+          diag_5?: string | null
+          diag_6?: string | null
+          diag_7?: string | null
+          diag_8?: string | null
+          diag_9?: string | null
+          diag_ref?: string
+          from_date?: string
           id?: string
-          ins_addr_2?: string | null
-          ins_city?: string | null
-          ins_country?: string | null
-          ins_dob?: string | null
-          ins_employer?: string | null
+          ins_addr_1?: string
+          ins_city?: string
+          ins_dob?: string
           ins_group?: string | null
-          ins_name_f?: string | null
-          ins_name_l?: string | null
-          ins_name_m?: string | null
-          ins_number?: string | null
-          ins_phone?: string | null
-          ins_plan?: string | null
-          ins_sex?: string | null
-          ins_state?: string | null
-          ins_zip?: string | null
-          lastseen_date?: string | null
-          mod1?: string | null
-          mod2?: string | null
-          mod3?: string | null
-          mod4?: string | null
-          narrative?: string | null
-          nowork_from_date?: string | null
-          onset_date?: string | null
-          ord_prov_addr_1?: string | null
-          ord_prov_addr_2?: string | null
-          ord_prov_city?: string | null
-          ord_prov_name_f?: string | null
-          ord_prov_name_l?: string | null
-          ord_prov_name_m?: string | null
-          ord_prov_npi?: string | null
-          ord_prov_state?: string | null
-          ord_prov_zip?: string | null
-          other_accident?: string | null
-          other_claimfilingcode?: string | null
-          other_ins_dob?: string | null
-          other_ins_group?: string | null
-          other_ins_medicare_code?: string | null
-          other_ins_name_f?: string | null
-          other_ins_name_l?: string | null
-          other_ins_name_m?: string | null
-          other_ins_number?: string | null
-          other_ins_payment_date?: string | null
-          other_ins_sex?: string | null
-          other_pat_rel?: string | null
-          other_payer_addr_1?: string | null
-          other_payer_addr_2?: string | null
-          other_payer_city?: string | null
-          other_payer_name?: string | null
-          other_payer_state?: string | null
-          other_payer_zip?: string | null
-          other_payerid?: string | null
-          pat_city?: string | null
-          pat_country?: string | null
-          pat_dob?: string | null
-          pat_marital?: string | null
-          pat_name_f?: string | null
-          pat_name_l?: string | null
-          pat_name_m?: string | null
-          pat_phone?: string | null
-          pat_rel?: string | null
-          pat_sex?: string | null
-          pat_state?: string | null
-          pat_zip?: string | null
-          payer_addr_1?: string | null
-          payer_addr_2?: string | null
-          payer_city?: string | null
-          payer_name?: string | null
-          payer_state?: string | null
-          payer_zip?: string | null
-          payerid?: string | null
-          pcn?: string | null
-          place_of_service?: string | null
-          primary_paid_amount_2?: number | null
-          primary_paid_date?: string | null
-          prior_auth?: string | null
-          proc_code?: string | null
-          prov_id?: string | null
-          prov_npi?: string | null
+          ins_name_f?: string
+          ins_name_l?: string
+          ins_number?: string
+          ins_state?: string
+          ins_zip?: string
+          last_status_check?: string | null
+          last_submission?: string | null
+          mod_1?: string | null
+          mod_2?: string | null
+          mod_3?: string | null
+          mod_4?: string | null
+          pat_addr_1?: string
+          pat_city?: string
+          pat_dob?: string
+          pat_name_f?: string
+          pat_name_l?: string
+          pat_rel?: string
+          pat_sex?: string
+          pat_state?: string
+          pat_zip?: string
+          payerid?: string
+          pcn?: string
+          place_of_service?: string
+          proc_code?: string
+          prov_name_f?: string
+          prov_name_l?: string
+          prov_npi?: string
           prov_taxonomy?: string | null
-          ref_id?: string | null
-          ref_name_f?: string | null
-          ref_name_l?: string | null
-          ref_name_m?: string | null
-          ref_npi?: string | null
-          referral_number?: string | null
-          stripe_customer_id?: string | null
-          thru_date?: string | null
-          total_charge?: number | null
+          remote_claimid?: string
+          response_json?: Json | null
+          status?: string | null
+          thru_date?: string
+          total_charge?: number
+          units?: number
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "cms1500_claims_client_id_fkey"
-            columns: ["client_id"]
+            foreignKeyName: "claims_appointment_id_fkey"
+            columns: ["appointment_id"]
             isOneToOne: false
-            referencedRelation: "clients"
+            referencedRelation: "appointments"
             referencedColumns: ["id"]
           },
         ]
@@ -1952,6 +1910,51 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      external_calendar_mappings: {
+        Row: {
+          appointment_id: string
+          connection_id: string
+          created_at: string | null
+          external_calendar_id: string
+          external_event_id: string
+          id: string
+          last_synced_at: string | null
+        }
+        Insert: {
+          appointment_id: string
+          connection_id: string
+          created_at?: string | null
+          external_calendar_id: string
+          external_event_id: string
+          id?: string
+          last_synced_at?: string | null
+        }
+        Update: {
+          appointment_id?: string
+          connection_id?: string
+          created_at?: string | null
+          external_calendar_id?: string
+          external_event_id?: string
+          id?: string
+          last_synced_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_calendar_mappings_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_calendar_mappings_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "nylas_connections"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       icd10: {
         Row: {
@@ -2075,6 +2078,273 @@ export type Database = {
           status?: string
         }
         Relationships: []
+      }
+      nylas_accounts: {
+        Row: {
+          access_token: string
+          clinician_id: string
+          created_at: string | null
+          email: string
+          expires_at: string | null
+          id: string
+          is_active: boolean | null
+          nylas_grant_id: string
+          provider: string
+          refresh_token: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          access_token: string
+          clinician_id: string
+          created_at?: string | null
+          email: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          nylas_grant_id: string
+          provider: string
+          refresh_token?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          access_token?: string
+          clinician_id?: string
+          created_at?: string | null
+          email?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          nylas_grant_id?: string
+          provider?: string
+          refresh_token?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nylas_accounts_clinician_id_fkey"
+            columns: ["clinician_id"]
+            isOneToOne: false
+            referencedRelation: "clinicians"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nylas_calendars: {
+        Row: {
+          calendar_description: string | null
+          calendar_name: string
+          created_at: string | null
+          id: string
+          is_primary: boolean | null
+          is_synced: boolean | null
+          nylas_account_id: string
+          nylas_calendar_id: string
+          sync_direction: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          calendar_description?: string | null
+          calendar_name: string
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          is_synced?: boolean | null
+          nylas_account_id: string
+          nylas_calendar_id: string
+          sync_direction?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          calendar_description?: string | null
+          calendar_name?: string
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          is_synced?: boolean | null
+          nylas_account_id?: string
+          nylas_calendar_id?: string
+          sync_direction?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nylas_calendars_nylas_account_id_fkey"
+            columns: ["nylas_account_id"]
+            isOneToOne: false
+            referencedRelation: "nylas_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nylas_connections: {
+        Row: {
+          access_token: string
+          calendar_ids: string[] | null
+          connector_id: string | null
+          created_at: string | null
+          email: string
+          grant_status: string | null
+          id: string
+          is_active: boolean | null
+          last_sync_at: string | null
+          provider: string
+          refresh_token: string | null
+          scopes: string[] | null
+          sync_preferences: Json | null
+          token_expires_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          calendar_ids?: string[] | null
+          connector_id?: string | null
+          created_at?: string | null
+          email: string
+          grant_status?: string | null
+          id: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          provider?: string
+          refresh_token?: string | null
+          scopes?: string[] | null
+          sync_preferences?: Json | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          calendar_ids?: string[] | null
+          connector_id?: string | null
+          created_at?: string | null
+          email?: string
+          grant_status?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          provider?: string
+          refresh_token?: string | null
+          scopes?: string[] | null
+          sync_preferences?: Json | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      nylas_scheduler_configs: {
+        Row: {
+          clinician_id: string
+          config_data: Json
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          public_url: string | null
+          scheduler_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          clinician_id: string
+          config_data?: Json
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          public_url?: string | null
+          scheduler_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          clinician_id?: string
+          config_data?: Json
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          public_url?: string | null
+          scheduler_id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      nylas_sync_logs: {
+        Row: {
+          completed_at: string | null
+          connection_id: string
+          created_at: string | null
+          direction: string
+          errors: Json | null
+          events_processed: number | null
+          id: string
+          started_at: string | null
+          status: string
+          sync_type: string
+        }
+        Insert: {
+          completed_at?: string | null
+          connection_id: string
+          created_at?: string | null
+          direction: string
+          errors?: Json | null
+          events_processed?: number | null
+          id?: string
+          started_at?: string | null
+          status: string
+          sync_type: string
+        }
+        Update: {
+          completed_at?: string | null
+          connection_id?: string
+          created_at?: string | null
+          direction?: string
+          errors?: Json | null
+          events_processed?: number | null
+          id?: string
+          started_at?: string | null
+          status?: string
+          sync_type?: string
+        }
+        Relationships: []
+      }
+      nylas_sync_status: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          events_synced: number | null
+          id: string
+          last_sync_at: string | null
+          nylas_account_id: string
+          sync_direction: string
+          sync_status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          events_synced?: number | null
+          id?: string
+          last_sync_at?: string | null
+          nylas_account_id: string
+          sync_direction: string
+          sync_status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          events_synced?: number | null
+          id?: string
+          last_sync_at?: string | null
+          nylas_account_id?: string
+          sync_direction?: string
+          sync_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nylas_sync_status_nylas_account_id_fkey"
+            columns: ["nylas_account_id"]
+            isOneToOne: false
+            referencedRelation: "nylas_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       phq9_assessments: {
         Row: {
@@ -2823,6 +3093,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cancel_appointment_and_delete_mapping: {
+        Args: {
+          p_appointment_id: string
+          p_mapping_id: string
+          p_notes: string
+        }
+        Returns: undefined
+      }
       check_table_exists: {
         Args: { check_table_name: string }
         Returns: boolean
@@ -2831,9 +3109,32 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      create_appointment_and_mapping: {
+        Args: {
+          p_clinician_id: string
+          p_type: string
+          p_status: Database["public"]["Enums"]["appointment_status"]
+          p_start_at: string
+          p_end_at: string
+          p_notes: string
+          p_external_event_id: string
+          p_connection_id: string
+          p_sync_direction: string
+          p_last_sync_hash: string
+        }
+        Returns: undefined
+      }
       create_or_replace_check_table_exists_function: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      debug_auth_context: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          current_user_id: string
+          current_user_role: string
+          is_authenticated: boolean
+        }[]
       }
       debug_client_therapist_matching: {
         Args: { p_therapist_id: string }
@@ -2877,6 +3178,17 @@ export type Database = {
         Args: { input_id: string }
         Returns: string
       }
+      update_appointment_and_mapping: {
+        Args: {
+          p_appointment_id: string
+          p_start_at: string
+          p_end_at: string
+          p_notes: string
+          p_mapping_id: string
+          p_last_sync_hash: string
+        }
+        Returns: undefined
+      }
       user_has_admin_role: {
         Args: { user_id: string }
         Returns: boolean
@@ -2884,6 +3196,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "client" | "clinician"
+      appointment_status: "scheduled" | "documented" | "no show"
       client_gender_identity_type: "Male" | "Female" | "Other"
       client_gender_type: "Male" | "Female"
       client_relationship_type: "Self" | "Parent/Guardian" | "Spouse" | "Child"
@@ -3112,6 +3425,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "client", "clinician"],
+      appointment_status: ["scheduled", "documented", "no show"],
       client_gender_identity_type: ["Male", "Female", "Other"],
       client_gender_type: ["Male", "Female"],
       client_relationship_type: ["Self", "Parent/Guardian", "Spouse", "Child"],
