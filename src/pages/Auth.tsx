@@ -31,6 +31,7 @@ export default function Auth() {
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [resetMessage, setResetMessage] = useState<{type: 'error' | 'success', text: string} | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string>("");
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,20 +58,82 @@ export default function Auth() {
     e.preventDefault();
     setResetLoading(true);
     setResetMessage(null);
+    setDebugInfo("");
 
-    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-      redirectTo: `${window.location.origin}/`,
-    });
+    try {
+      // Log detailed information about the reset attempt
+      const redirectUrl = `${window.location.origin}/`;
+      console.log('🔍 Password Reset Debug Info:');
+      console.log('- Email:', resetEmail);
+      console.log('- Redirect URL:', redirectUrl);
+      console.log('- Current origin:', window.location.origin);
+      console.log('- Current href:', window.location.href);
+      console.log('- Timestamp:', new Date().toISOString());
 
-    setResetLoading(false);
-    if (error) {
-      setResetMessage({ type: 'error', text: error.message });
-    } else {
-      setResetMessage({ type: 'success', text: 'If an account exists, a password reset link has been sent.' });
-      toast({
-        title: 'Password Reset',
-        description: 'If an account exists for this email, a password reset link has been sent to your inbox.',
+      // Check if the email is valid format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(resetEmail)) {
+        console.log('❌ Invalid email format');
+        setResetMessage({ type: 'error', text: 'Please enter a valid email address' });
+        setResetLoading(false);
+        return;
+      }
+
+      console.log('📧 Attempting to send password reset email...');
+      
+      // Make the actual reset request with detailed logging
+      const resetResponse = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: redirectUrl,
       });
+
+      console.log('📋 Full Supabase Response:', resetResponse);
+      console.log('- Data:', resetResponse.data);
+      console.log('- Error:', resetResponse.error);
+      
+      // Create debug info for display
+      const debugDetails = [
+        `Email: ${resetEmail}`,
+        `Redirect URL: ${redirectUrl}`,
+        `Response data: ${JSON.stringify(resetResponse.data)}`,
+        `Response error: ${resetResponse.error ? JSON.stringify(resetResponse.error) : 'null'}`,
+        `Timestamp: ${new Date().toISOString()}`
+      ].join('\n');
+      
+      setDebugInfo(debugDetails);
+
+      if (resetResponse.error) {
+        console.log('❌ Supabase returned an error:', resetResponse.error);
+        setResetMessage({ 
+          type: 'error', 
+          text: `Error: ${resetResponse.error.message}` 
+        });
+      } else {
+        console.log('✅ Reset request completed successfully');
+        console.log('- Note: Success does not guarantee email was sent, just that request was processed');
+        
+        setResetMessage({ 
+          type: 'success', 
+          text: 'If an account exists for this email, a password reset link has been sent.' 
+        });
+        
+        toast({
+          title: 'Password Reset',
+          description: 'If an account exists for this email, a password reset link has been sent to your inbox.',
+        });
+      }
+
+    } catch (err: any) {
+      console.log('💥 Caught exception during password reset:', err);
+      console.log('- Error message:', err.message);
+      console.log('- Error stack:', err.stack);
+      
+      setDebugInfo(`Exception caught: ${err.message}\nStack: ${err.stack}`);
+      setResetMessage({ 
+        type: 'error', 
+        text: `Unexpected error: ${err.message}` 
+      });
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -107,6 +170,7 @@ export default function Auth() {
                   if (!open) {
                     setResetMessage(null);
                     setResetEmail('');
+                    setDebugInfo("");
                   }
                 }}>
                   <DialogTrigger asChild>
@@ -114,7 +178,7 @@ export default function Auth() {
                       Forgot password?
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]">
+                  <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
                       <DialogTitle>Reset Password</DialogTitle>
                       <DialogDescription>
@@ -137,6 +201,16 @@ export default function Auth() {
                         {resetMessage && (
                             <Alert variant={resetMessage.type === 'error' ? 'destructive' : 'default'} className={resetMessage.type === 'success' ? 'border-green-500 text-green-700 dark:border-green-500 dark:text-green-400' : ''}>
                                 <AlertDescription>{resetMessage.text}</AlertDescription>
+                            </Alert>
+                        )}
+                        {debugInfo && (
+                            <Alert>
+                                <AlertDescription>
+                                    <strong>Debug Info:</strong>
+                                    <pre className="text-xs mt-2 whitespace-pre-wrap overflow-auto max-h-32">
+                                        {debugInfo}
+                                    </pre>
+                                </AlertDescription>
                             </Alert>
                         )}
                         <DialogFooter>

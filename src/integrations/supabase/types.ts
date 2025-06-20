@@ -179,7 +179,7 @@ export type Database = {
       appointments: {
         Row: {
           appointment_recurring: string | null
-          appointment_timezone: Database["public"]["Enums"]["time_zones"] | null
+          appointment_timezone: string | null
           billed_amount: number | null
           billing_notes: string | null
           buffer_after: number | null
@@ -231,9 +231,7 @@ export type Database = {
         }
         Insert: {
           appointment_recurring?: string | null
-          appointment_timezone?:
-            | Database["public"]["Enums"]["time_zones"]
-            | null
+          appointment_timezone?: string | null
           billed_amount?: number | null
           billing_notes?: string | null
           buffer_after?: number | null
@@ -285,9 +283,7 @@ export type Database = {
         }
         Update: {
           appointment_recurring?: string | null
-          appointment_timezone?:
-            | Database["public"]["Enums"]["time_zones"]
-            | null
+          appointment_timezone?: string | null
           billed_amount?: number | null
           billing_notes?: string | null
           buffer_after?: number | null
