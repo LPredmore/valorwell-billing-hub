@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -65,8 +66,7 @@ export default function Auth() {
       console.log('- Email:', resetEmail);
       console.log('- Redirect URL:', redirectUrl);
       console.log('- Current origin:', window.location.origin);
-      console.log('- Supabase URL:', supabase.supabaseUrl);
-      console.log('- Supabase Key (first 20 chars):', supabase.supabaseKey.substring(0, 20) + '...');
+      console.log('- Supabase URL:', "https://gqlkritspnhjxfejvgfg.supabase.co");
       console.log('- Browser User Agent:', navigator.userAgent);
       console.log('- Timestamp:', new Date().toISOString());
 
@@ -129,7 +129,7 @@ export default function Auth() {
         `User exists: ${userExists}`,
         `Redirect URL: ${redirectUrl}`,
         `Request duration: ${requestDuration.toFixed(2)}ms`,
-        `Supabase URL: ${supabase.supabaseUrl}`,
+        `Supabase URL: https://gqlkritspnhjxfejvgfg.supabase.co`,
         `Response data: ${JSON.stringify(resetResponse.data)}`,
         `Response error: ${resetResponse.error ? JSON.stringify(resetResponse.error) : 'null'}`,
         `Browser: ${navigator.userAgent.split(' ').slice(-2).join(' ')}`,
