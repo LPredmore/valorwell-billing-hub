@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -61,13 +60,14 @@ export default function Auth() {
     setDebugInfo("");
 
     try {
-      // Log detailed information about the reset attempt
       const redirectUrl = `${window.location.origin}/`;
-      console.log('🔍 Password Reset Debug Info:');
+      console.log('🔍 Enhanced Password Reset Debug Info:');
       console.log('- Email:', resetEmail);
       console.log('- Redirect URL:', redirectUrl);
       console.log('- Current origin:', window.location.origin);
-      console.log('- Current href:', window.location.href);
+      console.log('- Supabase URL:', supabase.supabaseUrl);
+      console.log('- Supabase Key (first 20 chars):', supabase.supabaseKey.substring(0, 20) + '...');
+      console.log('- Browser User Agent:', navigator.userAgent);
       console.log('- Timestamp:', new Date().toISOString());
 
       // Check if the email is valid format
@@ -81,21 +81,58 @@ export default function Auth() {
 
       console.log('📧 Attempting to send password reset email...');
       
-      // Make the actual reset request with detailed logging
+      // First, let's check if the user exists by trying to sign in with an invalid password
+      console.log('🔍 Checking if user exists in auth system...');
+      const userCheckResponse = await supabase.auth.signInWithPassword({
+        email: resetEmail,
+        password: 'intentionally_wrong_password_to_check_user_existence'
+      });
+      
+      console.log('👤 User existence check response:', userCheckResponse);
+      const userExists = userCheckResponse.error?.message !== "Invalid login credentials";
+      console.log('👤 User exists in system:', userExists);
+
+      // Now attempt the actual password reset
+      console.log('🚀 Making resetPasswordForEmail request...');
+      const startTime = performance.now();
+      
       const resetResponse = await supabase.auth.resetPasswordForEmail(resetEmail, {
         redirectTo: redirectUrl,
       });
 
+      const endTime = performance.now();
+      const requestDuration = endTime - startTime;
+
+      console.log('⏱️ Request took:', requestDuration, 'milliseconds');
       console.log('📋 Full Supabase Response:', resetResponse);
-      console.log('- Data:', resetResponse.data);
-      console.log('- Error:', resetResponse.error);
+      console.log('- Data type:', typeof resetResponse.data);
+      console.log('- Data keys:', resetResponse.data ? Object.keys(resetResponse.data) : 'null');
+      console.log('- Error type:', typeof resetResponse.error);
+      console.log('- Error details:', resetResponse.error);
       
-      // Create debug info for display
+      // Check the current session state
+      const sessionCheck = await supabase.auth.getSession();
+      console.log('🔐 Current session state:', sessionCheck);
+
+      // Check Supabase connection
+      console.log('🌐 Testing basic Supabase connectivity...');
+      try {
+        const healthCheck = await supabase.from('admins').select('count', { count: 'exact', head: true });
+        console.log('💚 Supabase connectivity test:', healthCheck);
+      } catch (healthError) {
+        console.log('❌ Supabase connectivity test failed:', healthError);
+      }
+      
+      // Create enhanced debug info for display
       const debugDetails = [
         `Email: ${resetEmail}`,
+        `User exists: ${userExists}`,
         `Redirect URL: ${redirectUrl}`,
+        `Request duration: ${requestDuration.toFixed(2)}ms`,
+        `Supabase URL: ${supabase.supabaseUrl}`,
         `Response data: ${JSON.stringify(resetResponse.data)}`,
         `Response error: ${resetResponse.error ? JSON.stringify(resetResponse.error) : 'null'}`,
+        `Browser: ${navigator.userAgent.split(' ').slice(-2).join(' ')}`,
         `Timestamp: ${new Date().toISOString()}`
       ].join('\n');
       
@@ -109,11 +146,13 @@ export default function Auth() {
         });
       } else {
         console.log('✅ Reset request completed successfully');
-        console.log('- Note: Success does not guarantee email was sent, just that request was processed');
+        console.log('📧 Expected behavior: If user exists, email should be sent');
         
         setResetMessage({ 
           type: 'success', 
-          text: 'If an account exists for this email, a password reset link has been sent.' 
+          text: userExists 
+            ? 'Password reset email sent! Check your inbox and spam folder.' 
+            : 'If an account exists for this email, a password reset link has been sent.'
         });
         
         toast({
@@ -125,9 +164,10 @@ export default function Auth() {
     } catch (err: any) {
       console.log('💥 Caught exception during password reset:', err);
       console.log('- Error message:', err.message);
+      console.log('- Error name:', err.name);
       console.log('- Error stack:', err.stack);
       
-      setDebugInfo(`Exception caught: ${err.message}\nStack: ${err.stack}`);
+      setDebugInfo(`Exception: ${err.name}: ${err.message}\nStack: ${err.stack}`);
       setResetMessage({ 
         type: 'error', 
         text: `Unexpected error: ${err.message}` 
@@ -178,7 +218,7 @@ export default function Auth() {
                       Forgot password?
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[500px]">
+                  <DialogContent className="sm:max-w-[600px]">
                     <DialogHeader>
                       <DialogTitle>Reset Password</DialogTitle>
                       <DialogDescription>
@@ -206,8 +246,8 @@ export default function Auth() {
                         {debugInfo && (
                             <Alert>
                                 <AlertDescription>
-                                    <strong>Debug Info:</strong>
-                                    <pre className="text-xs mt-2 whitespace-pre-wrap overflow-auto max-h-32">
+                                    <strong>Enhanced Debug Info:</strong>
+                                    <pre className="text-xs mt-2 whitespace-pre-wrap overflow-auto max-h-48 bg-gray-50 p-2 rounded">
                                         {debugInfo}
                                     </pre>
                                 </AlertDescription>
