@@ -37,10 +37,21 @@ export const claimsService = {
     billed_amount?: number;
   }) {
     try {
+      // Update the CMS1500_claims table, not appointments
       const { data, error } = await supabase
-        .from('appointments')
-        .update(billingDetails)
-        .eq('id', appointmentId)
+        .from('CMS1500_claims')
+        .update({
+          proc_code: billingDetails.cpt_code,
+          mod_1: billingDetails.modifiers?.[0],
+          mod_2: billingDetails.modifiers?.[1], 
+          mod_3: billingDetails.modifiers?.[2],
+          mod_4: billingDetails.modifiers?.[3],
+          diag_ref: billingDetails.diagnosis_code_pointers,
+          place_of_service: billingDetails.place_of_service_code,
+          charge: billingDetails.billed_amount,
+          total_charge: billingDetails.billed_amount
+        })
+        .eq('appointment_id', appointmentId)
         .select();
 
       if (error) {
@@ -82,9 +93,9 @@ export const claimsService = {
   async getClaimHistory(appointmentId: string) {
     try {
       const { data, error } = await supabase
-        .from('appointments')
-        .select('claim_status, claim_last_submission_date, claim_response_json, claimid, claim_claimmd_batch_id')
-        .eq('id', appointmentId)
+        .from('CMS1500_claims')
+        .select('status, last_submission, response_json, remote_claimid, claim_md_batch_id')
+        .eq('appointment_id', appointmentId)
         .single();
 
       if (error) {
@@ -92,7 +103,13 @@ export const claimsService = {
         throw error;
       }
 
-      return data;
+      return {
+        claim_status: data.status,
+        claim_last_submission_date: data.last_submission,
+        claim_response_json: data.response_json,
+        claimid: data.remote_claimid,
+        claim_claimmd_batch_id: data.claim_md_batch_id
+      };
     } catch (error) {
       console.error("Failed to fetch claim history:", error);
       throw error;
@@ -125,20 +142,17 @@ export const claimsService = {
    */
   async getEraPaymentData(appointmentId: string) {
     try {
+      // ERA payment data would be stored separately or in CMS1500_claims
+      // For now, return basic claim data from CMS1500_claims
       const { data, error } = await supabase
-        .from('appointments')
+        .from('CMS1500_claims')
         .select(`
-          insurance_paid_amount,
-          insurance_adjustment_amount,
-          insurance_adjustment_details_json,
-          patient_responsibility_amount,
-          era_payment_date,
-          era_check_eft_number,
-          era_claimmd_id,
-          denial_details_json,
-          claim_status
+          status,
+          response_json,
+          charge,
+          total_charge
         `)
-        .eq('id', appointmentId)
+        .eq('appointment_id', appointmentId)
         .single();
 
       if (error) {
@@ -146,7 +160,18 @@ export const claimsService = {
         throw error;
       }
 
-      return data;
+      // Map to expected format
+      return {
+        insurance_paid_amount: null,
+        insurance_adjustment_amount: null,
+        insurance_adjustment_details_json: null,
+        patient_responsibility_amount: null,
+        era_payment_date: null,
+        era_check_eft_number: null,
+        era_claimmd_id: null,
+        denial_details_json: null,
+        claim_status: data.status
+      };
     } catch (error) {
       console.error("Failed to fetch ERA payment data:", error);
       throw error;
@@ -204,26 +229,31 @@ export const claimsService = {
   async getEraList() {
     try {
       const { data, error } = await supabase
-        .from('appointments')
+        .from('CMS1500_claims')
         .select(`
-          era_claimmd_id,
-          era_payment_date,
-          era_check_eft_number,
-          insurance_paid_amount
+          claim_md_id,
+          last_submission,
+          status,
+          charge
         `)
-        .not('era_claimmd_id', 'is', null)
-        .order('era_payment_date', { ascending: false });
+        .not('claim_md_id', 'is', null)
+        .order('last_submission', { ascending: false });
 
       if (error) {
         console.error("Error fetching ERA list:", error);
         throw error;
       }
 
-      // Group by era_claimmd_id to get unique ERA files
+      // Group by claim_md_id to get unique ERA files
       const eraMap = new Map();
       data?.forEach(item => {
-        if (!eraMap.has(item.era_claimmd_id)) {
-          eraMap.set(item.era_claimmd_id, item);
+        if (!eraMap.has(item.claim_md_id)) {
+          eraMap.set(item.claim_md_id, {
+            era_claimmd_id: item.claim_md_id,
+            era_payment_date: item.last_submission,
+            era_check_eft_number: null,
+            insurance_paid_amount: item.charge
+          });
         }
       });
 
@@ -247,11 +277,16 @@ export const claimsService = {
             id,
             client_first_name,
             client_last_name
+          ),
+          CMS1500_claims (
+            status,
+            claim_md_id,
+            last_submission,
+            charge
           )
         `)
-        .not('era_claimmd_id', 'is', null)
-        .is('patient_payment_status', null)
-        .order('era_payment_date', { ascending: false });
+        .not('CMS1500_claims.claim_md_id', 'is', null)
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error("Error fetching unreconciled payments:", error);
@@ -266,7 +301,10 @@ export const claimsService = {
           
         return {
           ...appointment,
-          client_name: clientName
+          client_name: clientName,
+          era_claimmd_id: appointment.CMS1500_claims?.[0]?.claim_md_id,
+          era_payment_date: appointment.CMS1500_claims?.[0]?.last_submission,
+          claim_status: appointment.CMS1500_claims?.[0]?.status
         };
       });
 
@@ -289,10 +327,22 @@ export const claimsService = {
     billing_notes?: string;
   }) {
     try {
+      // For now, update the CMS1500_claims table with available fields
+      // Payment tracking might need a separate table in the future
       const { data, error } = await supabase
-        .from('appointments')
-        .update(paymentInfo)
-        .eq('id', appointmentId)
+        .from('CMS1500_claims')
+        .update({
+          // Map payment info to available fields in CMS1500_claims
+          response_json: {
+            insurance_paid_amount: paymentInfo.insurance_paid_amount,
+            insurance_adjustment_amount: paymentInfo.insurance_adjustment_amount,
+            patient_responsibility_amount: paymentInfo.patient_responsibility_amount,
+            patient_payment_status: paymentInfo.patient_payment_status,
+            patient_paid_amount: paymentInfo.patient_paid_amount,
+            billing_notes: paymentInfo.billing_notes
+          }
+        })
+        .eq('appointment_id', appointmentId)
         .select();
 
       if (error) {
@@ -337,30 +387,32 @@ export const claimsService = {
   async getEraDetail(eraId: string) {
     try {
       const { data, error } = await supabase
-        .from('appointments')
+        .from('CMS1500_claims')
         .select(`
           id,
-          era_claimmd_id,
-          era_payment_date,
-          era_check_eft_number,
-          insurance_paid_amount,
-          insurance_adjustment_amount,
-          patient_responsibility_amount,
-          claim_status,
-          cpt_code,
-          billed_amount,
-          client_id,
-          clinician_id,
-          clients (
-            client_first_name,
-            client_last_name
-          ),
-          clinicians (
-            clinician_first_name,
-            clinician_last_name
+          appointment_id,
+          claim_md_id,
+          last_submission,
+          charge,
+          total_charge,
+          status,
+          proc_code,
+          response_json,
+          appointments (
+            id,
+            client_id,
+            clinician_id,
+            clients (
+              client_first_name,
+              client_last_name
+            ),
+            clinicians (
+              clinician_first_name,
+              clinician_last_name
+            )
           )
         `)
-        .eq('era_claimmd_id', eraId);
+        .eq('claim_md_id', eraId);
 
       if (error) {
         console.error(`Error fetching ERA detail for ID ${eraId}:`, error);
@@ -368,17 +420,29 @@ export const claimsService = {
       }
       
       // Process the data to add formatted names
-      const processedData = data?.map(appointment => {
-        const clientName = appointment.clients 
+      const processedData = data?.map(claim => {
+        const appointment = claim.appointments;
+        const clientName = appointment?.clients 
           ? `${appointment.clients.client_first_name || ''} ${appointment.clients.client_last_name || ''}`.trim()
           : 'Unknown';
           
-        const clinicianName = appointment.clinicians
+        const clinicianName = appointment?.clinicians
           ? `${appointment.clinicians.clinician_first_name || ''} ${appointment.clinicians.clinician_last_name || ''}`.trim()
           : 'Unknown';
           
         return {
-          ...appointment,
+          id: appointment?.id,
+          era_claimmd_id: claim.claim_md_id,
+          era_payment_date: claim.last_submission,
+          era_check_eft_number: null,
+          insurance_paid_amount: null,
+          insurance_adjustment_amount: null,
+          patient_responsibility_amount: null,
+          claim_status: claim.status,
+          cpt_code: claim.proc_code,
+          billed_amount: claim.charge,
+          client_id: appointment?.client_id,
+          clinician_id: appointment?.clinician_id,
           client_name: clientName,
           clinician_name: clinicianName
         };
