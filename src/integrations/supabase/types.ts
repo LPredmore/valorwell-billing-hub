@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instanciate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "12.2.3 (519615d)"
+  }
   public: {
     Tables: {
       admins: {
@@ -179,51 +184,29 @@ export type Database = {
       appointments: {
         Row: {
           appointment_recurring: string | null
-          appointment_timezone: string | null
-          billed_amount: number | null
-          billing_notes: string | null
           buffer_after: number | null
           buffer_before: number | null
-          claim_claimmd_batch_id: string | null
-          claim_last_submission_date: string | null
-          claim_response_json: Json | null
-          claim_status: string | null
-          claim_status_last_checked: string | null
-          claimid: string | null
+          client_email: string | null
           client_id: string
+          client_name: string | null
+          client_timezone: Database["public"]["Enums"]["time_zones"] | null
+          clinician_email: string | null
           clinician_id: string
-          cpt_code: string | null
+          clinician_name: string | null
           created_at: string
-          denial_details_json: Json | null
-          diagnosis_code_pointers: string | null
+          date_of_session: string | null
           end_at: string
-          era_check_eft_number: string | null
-          era_claimmd_id: string | null
-          era_payment_date: string | null
           flexibility_window: Json | null
-          google_calendar_event_id: string | null
           id: string
-          insurance_adjustment_amount: number | null
-          insurance_adjustment_details_json: Json | null
-          insurance_paid_amount: number | null
           is_flexible: boolean | null
           last_real_time_update: string | null
-          last_statement_to_patient_date: string | null
           last_synced_at: string | null
-          modifiers: string[] | null
           notes: string | null
-          patient_paid_amount: number | null
-          patient_payment_date: string | null
-          patient_payment_status: string | null
-          patient_responsibility_amount: number | null
-          place_of_service_code: string | null
           priority: number | null
           real_time_update_source: string | null
           recurring_group_id: string | null
-          requires_billing_review: boolean | null
           start_at: string
           status: string
-          stripe_charge_ids: string[] | null
           template_id: string | null
           type: string
           updated_at: string
@@ -231,51 +214,29 @@ export type Database = {
         }
         Insert: {
           appointment_recurring?: string | null
-          appointment_timezone?: string | null
-          billed_amount?: number | null
-          billing_notes?: string | null
           buffer_after?: number | null
           buffer_before?: number | null
-          claim_claimmd_batch_id?: string | null
-          claim_last_submission_date?: string | null
-          claim_response_json?: Json | null
-          claim_status?: string | null
-          claim_status_last_checked?: string | null
-          claimid?: string | null
+          client_email?: string | null
           client_id: string
+          client_name?: string | null
+          client_timezone?: Database["public"]["Enums"]["time_zones"] | null
+          clinician_email?: string | null
           clinician_id: string
-          cpt_code?: string | null
+          clinician_name?: string | null
           created_at?: string
-          denial_details_json?: Json | null
-          diagnosis_code_pointers?: string | null
+          date_of_session?: string | null
           end_at: string
-          era_check_eft_number?: string | null
-          era_claimmd_id?: string | null
-          era_payment_date?: string | null
           flexibility_window?: Json | null
-          google_calendar_event_id?: string | null
           id?: string
-          insurance_adjustment_amount?: number | null
-          insurance_adjustment_details_json?: Json | null
-          insurance_paid_amount?: number | null
           is_flexible?: boolean | null
           last_real_time_update?: string | null
-          last_statement_to_patient_date?: string | null
           last_synced_at?: string | null
-          modifiers?: string[] | null
           notes?: string | null
-          patient_paid_amount?: number | null
-          patient_payment_date?: string | null
-          patient_payment_status?: string | null
-          patient_responsibility_amount?: number | null
-          place_of_service_code?: string | null
           priority?: number | null
           real_time_update_source?: string | null
           recurring_group_id?: string | null
-          requires_billing_review?: boolean | null
           start_at: string
           status?: string
-          stripe_charge_ids?: string[] | null
           template_id?: string | null
           type: string
           updated_at?: string
@@ -283,51 +244,29 @@ export type Database = {
         }
         Update: {
           appointment_recurring?: string | null
-          appointment_timezone?: string | null
-          billed_amount?: number | null
-          billing_notes?: string | null
           buffer_after?: number | null
           buffer_before?: number | null
-          claim_claimmd_batch_id?: string | null
-          claim_last_submission_date?: string | null
-          claim_response_json?: Json | null
-          claim_status?: string | null
-          claim_status_last_checked?: string | null
-          claimid?: string | null
+          client_email?: string | null
           client_id?: string
+          client_name?: string | null
+          client_timezone?: Database["public"]["Enums"]["time_zones"] | null
+          clinician_email?: string | null
           clinician_id?: string
-          cpt_code?: string | null
+          clinician_name?: string | null
           created_at?: string
-          denial_details_json?: Json | null
-          diagnosis_code_pointers?: string | null
+          date_of_session?: string | null
           end_at?: string
-          era_check_eft_number?: string | null
-          era_claimmd_id?: string | null
-          era_payment_date?: string | null
           flexibility_window?: Json | null
-          google_calendar_event_id?: string | null
           id?: string
-          insurance_adjustment_amount?: number | null
-          insurance_adjustment_details_json?: Json | null
-          insurance_paid_amount?: number | null
           is_flexible?: boolean | null
           last_real_time_update?: string | null
-          last_statement_to_patient_date?: string | null
           last_synced_at?: string | null
-          modifiers?: string[] | null
           notes?: string | null
-          patient_paid_amount?: number | null
-          patient_payment_date?: string | null
-          patient_payment_status?: string | null
-          patient_responsibility_amount?: number | null
-          place_of_service_code?: string | null
           priority?: number | null
           real_time_update_source?: string | null
           recurring_group_id?: string | null
-          requires_billing_review?: boolean | null
           start_at?: string
           status?: string
-          stripe_charge_ids?: string[] | null
           template_id?: string | null
           type?: string
           updated_at?: string
@@ -436,6 +375,94 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      availability_sync_status: {
+        Row: {
+          clinician_id: string
+          created_at: string | null
+          day_of_week: string
+          error_message: string | null
+          id: string
+          last_synced_at: string | null
+          nylas_event_id: string | null
+          slot_number: number
+          sync_status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          clinician_id: string
+          created_at?: string | null
+          day_of_week: string
+          error_message?: string | null
+          id?: string
+          last_synced_at?: string | null
+          nylas_event_id?: string | null
+          slot_number: number
+          sync_status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          clinician_id?: string
+          created_at?: string | null
+          day_of_week?: string
+          error_message?: string | null
+          id?: string
+          last_synced_at?: string | null
+          nylas_event_id?: string | null
+          slot_number?: number
+          sync_status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "availability_sync_status_clinician_id_fkey"
+            columns: ["clinician_id"]
+            isOneToOne: false
+            referencedRelation: "clinicians"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blocked_time: {
+        Row: {
+          clinician_id: string
+          created_at: string
+          end_at: string
+          id: string
+          label: string
+          notes: string | null
+          start_at: string
+          updated_at: string
+        }
+        Insert: {
+          clinician_id: string
+          created_at?: string
+          end_at: string
+          id?: string
+          label?: string
+          notes?: string | null
+          start_at: string
+          updated_at?: string
+        }
+        Update: {
+          clinician_id?: string
+          created_at?: string
+          end_at?: string
+          id?: string
+          label?: string
+          notes?: string | null
+          start_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blocked_time_clinician_id_fkey"
+            columns: ["clinician_id"]
+            isOneToOne: false
+            referencedRelation: "clinicians"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       calendar_sync_logs: {
         Row: {
@@ -886,6 +913,7 @@ export type Database = {
           client_last_name: string | null
           client_medications: string | null
           client_memoryconcentration: string | null
+          client_middle_name: string | null
           client_minor: string | null
           client_mood: string | null
           client_nexttreatmentplanupdate: string | null
@@ -944,15 +972,28 @@ export type Database = {
           client_tricare_sponsor_name: string | null
           client_vacoverage: string | null
           client_zip_code: string | null
-          client_zipcode: string | null
           created_at: string
           eligibility_claimmd_id_primary: string | null
+          eligibility_claimmd_id_secondary: string | null
+          eligibility_claimmd_id_tertiary: string | null
           eligibility_coinsurance_primary_percent: number | null
+          eligibility_coinsurance_secondary_percent: number | null
+          eligibility_coinsurance_tertiary_percent: number | null
           eligibility_copay_primary: number | null
+          eligibility_copay_secondary: number | null
+          eligibility_copay_tertiary: number | null
           eligibility_deductible_primary: number | null
+          eligibility_deductible_secondary: number | null
+          eligibility_deductible_tertiary: number | null
           eligibility_last_checked_primary: string | null
+          eligibility_last_checked_secondary: string | null
+          eligibility_last_checked_tertiary: string | null
           eligibility_response_details_primary_json: Json | null
+          eligibility_response_details_secondary_json: Json | null
+          eligibility_response_details_tertiary_json: Json | null
           eligibility_status_primary: string | null
+          eligibility_status_secondary: string | null
+          eligibility_status_tertiary: string | null
           id: string
           role: Database["public"]["Enums"]["app_role"]
           stripe_customer_id: string | null
@@ -999,6 +1040,7 @@ export type Database = {
           client_last_name?: string | null
           client_medications?: string | null
           client_memoryconcentration?: string | null
+          client_middle_name?: string | null
           client_minor?: string | null
           client_mood?: string | null
           client_nexttreatmentplanupdate?: string | null
@@ -1057,15 +1099,28 @@ export type Database = {
           client_tricare_sponsor_name?: string | null
           client_vacoverage?: string | null
           client_zip_code?: string | null
-          client_zipcode?: string | null
           created_at?: string
           eligibility_claimmd_id_primary?: string | null
+          eligibility_claimmd_id_secondary?: string | null
+          eligibility_claimmd_id_tertiary?: string | null
           eligibility_coinsurance_primary_percent?: number | null
+          eligibility_coinsurance_secondary_percent?: number | null
+          eligibility_coinsurance_tertiary_percent?: number | null
           eligibility_copay_primary?: number | null
+          eligibility_copay_secondary?: number | null
+          eligibility_copay_tertiary?: number | null
           eligibility_deductible_primary?: number | null
+          eligibility_deductible_secondary?: number | null
+          eligibility_deductible_tertiary?: number | null
           eligibility_last_checked_primary?: string | null
+          eligibility_last_checked_secondary?: string | null
+          eligibility_last_checked_tertiary?: string | null
           eligibility_response_details_primary_json?: Json | null
+          eligibility_response_details_secondary_json?: Json | null
+          eligibility_response_details_tertiary_json?: Json | null
           eligibility_status_primary?: string | null
+          eligibility_status_secondary?: string | null
+          eligibility_status_tertiary?: string | null
           id: string
           role?: Database["public"]["Enums"]["app_role"]
           stripe_customer_id?: string | null
@@ -1112,6 +1167,7 @@ export type Database = {
           client_last_name?: string | null
           client_medications?: string | null
           client_memoryconcentration?: string | null
+          client_middle_name?: string | null
           client_minor?: string | null
           client_mood?: string | null
           client_nexttreatmentplanupdate?: string | null
@@ -1170,15 +1226,28 @@ export type Database = {
           client_tricare_sponsor_name?: string | null
           client_vacoverage?: string | null
           client_zip_code?: string | null
-          client_zipcode?: string | null
           created_at?: string
           eligibility_claimmd_id_primary?: string | null
+          eligibility_claimmd_id_secondary?: string | null
+          eligibility_claimmd_id_tertiary?: string | null
           eligibility_coinsurance_primary_percent?: number | null
+          eligibility_coinsurance_secondary_percent?: number | null
+          eligibility_coinsurance_tertiary_percent?: number | null
           eligibility_copay_primary?: number | null
+          eligibility_copay_secondary?: number | null
+          eligibility_copay_tertiary?: number | null
           eligibility_deductible_primary?: number | null
+          eligibility_deductible_secondary?: number | null
+          eligibility_deductible_tertiary?: number | null
           eligibility_last_checked_primary?: string | null
+          eligibility_last_checked_secondary?: string | null
+          eligibility_last_checked_tertiary?: string | null
           eligibility_response_details_primary_json?: Json | null
+          eligibility_response_details_secondary_json?: Json | null
+          eligibility_response_details_tertiary_json?: Json | null
           eligibility_status_primary?: string | null
+          eligibility_status_secondary?: string | null
+          eligibility_status_tertiary?: string | null
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           stripe_customer_id?: string | null
@@ -1279,7 +1348,9 @@ export type Database = {
       }
       clinicians: {
         Row: {
-          clinician_accepting_new_clients: string | null
+          clinician_accepting_new_clients:
+            | Database["public"]["Enums"]["Yes/No"]
+            | null
           clinician_availability_end_friday_1: string | null
           clinician_availability_end_friday_2: string | null
           clinician_availability_end_friday_3: string | null
@@ -1344,6 +1415,8 @@ export type Database = {
           clinician_availability_timezone_wednesday_2: string | null
           clinician_availability_timezone_wednesday_3: string | null
           clinician_bio: string | null
+          clinician_calendar_end_time: string | null
+          clinician_calendar_start_time: string | null
           clinician_email: string | null
           clinician_first_name: string | null
           clinician_image_url: string | null
@@ -1374,7 +1447,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          clinician_accepting_new_clients?: string | null
+          clinician_accepting_new_clients?:
+            | Database["public"]["Enums"]["Yes/No"]
+            | null
           clinician_availability_end_friday_1?: string | null
           clinician_availability_end_friday_2?: string | null
           clinician_availability_end_friday_3?: string | null
@@ -1439,6 +1514,8 @@ export type Database = {
           clinician_availability_timezone_wednesday_2?: string | null
           clinician_availability_timezone_wednesday_3?: string | null
           clinician_bio?: string | null
+          clinician_calendar_end_time?: string | null
+          clinician_calendar_start_time?: string | null
           clinician_email?: string | null
           clinician_first_name?: string | null
           clinician_image_url?: string | null
@@ -1471,7 +1548,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          clinician_accepting_new_clients?: string | null
+          clinician_accepting_new_clients?:
+            | Database["public"]["Enums"]["Yes/No"]
+            | null
           clinician_availability_end_friday_1?: string | null
           clinician_availability_end_friday_2?: string | null
           clinician_availability_end_friday_3?: string | null
@@ -1536,6 +1615,8 @@ export type Database = {
           clinician_availability_timezone_wednesday_2?: string | null
           clinician_availability_timezone_wednesday_3?: string | null
           clinician_bio?: string | null
+          clinician_calendar_end_time?: string | null
+          clinician_calendar_start_time?: string | null
           clinician_email?: string | null
           clinician_first_name?: string | null
           clinician_image_url?: string | null
@@ -1907,6 +1988,65 @@ export type Database = {
         }
         Relationships: []
       }
+      eligibility_audit: {
+        Row: {
+          claimmd_transaction_id: string | null
+          client_id: string
+          coinsurance_percent: number | null
+          copay: number | null
+          created_at: string | null
+          deductible: number | null
+          error_message: string | null
+          id: string
+          insurance_level: string
+          processing_time_ms: number | null
+          request_payload: Json | null
+          response_payload: Json | null
+          status: string
+          verification_date: string | null
+        }
+        Insert: {
+          claimmd_transaction_id?: string | null
+          client_id: string
+          coinsurance_percent?: number | null
+          copay?: number | null
+          created_at?: string | null
+          deductible?: number | null
+          error_message?: string | null
+          id?: string
+          insurance_level: string
+          processing_time_ms?: number | null
+          request_payload?: Json | null
+          response_payload?: Json | null
+          status: string
+          verification_date?: string | null
+        }
+        Update: {
+          claimmd_transaction_id?: string | null
+          client_id?: string
+          coinsurance_percent?: number | null
+          copay?: number | null
+          created_at?: string | null
+          deductible?: number | null
+          error_message?: string | null
+          id?: string
+          insurance_level?: string
+          processing_time_ms?: number | null
+          request_payload?: Json | null
+          response_payload?: Json | null
+          status?: string
+          verification_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "eligibility_audit_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       external_calendar_mappings: {
         Row: {
           appointment_id: string
@@ -2179,6 +2319,7 @@ export type Database = {
           connector_id: string | null
           created_at: string | null
           email: string
+          grant_id: string | null
           grant_status: string | null
           id: string
           is_active: boolean | null
@@ -2197,8 +2338,9 @@ export type Database = {
           connector_id?: string | null
           created_at?: string | null
           email: string
+          grant_id?: string | null
           grant_status?: string | null
-          id: string
+          id?: string
           is_active?: boolean | null
           last_sync_at?: string | null
           provider?: string
@@ -2215,6 +2357,7 @@ export type Database = {
           connector_id?: string | null
           created_at?: string | null
           email?: string
+          grant_id?: string | null
           grant_status?: string | null
           id?: string
           is_active?: boolean | null
@@ -2454,6 +2597,56 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      provider_profiles: {
+        Row: {
+          clinician_id: string | null
+          created_at: string | null
+          id: string
+          is_primary: boolean | null
+          license_numbers: Json | null
+          npi_number: string
+          specialties: string[] | null
+          status: string | null
+          tax_id: string | null
+          taxonomy_code: string
+          updated_at: string | null
+        }
+        Insert: {
+          clinician_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          license_numbers?: Json | null
+          npi_number: string
+          specialties?: string[] | null
+          status?: string | null
+          tax_id?: string | null
+          taxonomy_code: string
+          updated_at?: string | null
+        }
+        Update: {
+          clinician_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          license_numbers?: Json | null
+          npi_number?: string
+          specialties?: string[] | null
+          status?: string | null
+          tax_id?: string | null
+          taxonomy_code?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_profiles_clinician_id_fkey"
+            columns: ["clinician_id"]
+            isOneToOne: false
+            referencedRelation: "clinicians"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       real_time_notifications: {
         Row: {
@@ -3097,6 +3290,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      check_blocked_time_integrity: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          check_type: string
+          status: string
+          count: number
+          message: string
+        }[]
+      }
       check_table_exists: {
         Args: { check_table_name: string }
         Returns: boolean
@@ -3150,6 +3352,45 @@ export type Database = {
         }
         Returns: boolean
       }
+      format_date_for_claimmd: {
+        Args: { input_date: string }
+        Returns: string
+      }
+      format_timestamp_for_claimmd: {
+        Args: { input_timestamp: string }
+        Returns: string
+      }
+      get_clinician_availability_instances: {
+        Args: {
+          p_clinician_id: string
+          p_start_date: string
+          p_end_date: string
+          p_user_timezone?: string
+        }
+        Returns: {
+          day_of_week: string
+          start_time: string
+          end_time: string
+          timezone: string
+          slot_number: number
+          specific_date: string
+          utc_start_time: string
+          utc_end_time: string
+        }[]
+      }
+      get_filtered_clinical_documents: {
+        Args: { p_client_id: string }
+        Returns: {
+          id: string
+          client_id: string
+          document_title: string
+          document_type: string
+          document_date: string
+          file_path: string
+          created_at: string
+          created_by: string
+        }[]
+      }
       get_unread_notification_count: {
         Args: { p_user_id: string }
         Returns: number
@@ -3170,6 +3411,10 @@ export type Database = {
         Args: { p_user_id: string; p_notification_ids?: string[] }
         Returns: number
       }
+      parse_claimmd_date: {
+        Args: { claimmd_date: string }
+        Returns: string
+      }
       standardize_uuid: {
         Args: { input_id: string }
         Returns: string
@@ -3189,10 +3434,19 @@ export type Database = {
         Args: { user_id: string }
         Returns: boolean
       }
+      validate_timezone_integrity: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          check_type: string
+          status: string
+          count: number
+          message: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "client" | "clinician"
-      appointment_status: "scheduled" | "documented" | "no show"
+      appointment_status: "scheduled" | "documented" | "no show" | "cancelled"
       client_gender_identity_type: "Male" | "Female" | "Other"
       client_gender_type: "Male" | "Female"
       client_relationship_type: "Self" | "Parent/Guardian" | "Spouse" | "Child"
@@ -3305,6 +3559,7 @@ export type Database = {
         | "Pacific/Honolulu"
         | "America/Phoenix"
       user_role: "user" | "admin"
+      "Yes/No": "Yes" | "No"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3312,21 +3567,25 @@ export type Database = {
   }
 }
 
-type DefaultSchema = Database[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
@@ -3344,14 +3603,16 @@ export type Tables<
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
@@ -3367,14 +3628,16 @@ export type TablesInsert<
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
@@ -3390,14 +3653,16 @@ export type TablesUpdate<
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
@@ -3405,14 +3670,16 @@ export type Enums<
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
@@ -3421,7 +3688,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "client", "clinician"],
-      appointment_status: ["scheduled", "documented", "no show"],
+      appointment_status: ["scheduled", "documented", "no show", "cancelled"],
       client_gender_identity_type: ["Male", "Female", "Other"],
       client_gender_type: ["Male", "Female"],
       client_relationship_type: ["Self", "Parent/Guardian", "Spouse", "Child"],
@@ -3541,6 +3808,7 @@ export const Constants = {
         "America/Phoenix",
       ],
       user_role: ["user", "admin"],
+      "Yes/No": ["Yes", "No"],
     },
   },
 } as const
