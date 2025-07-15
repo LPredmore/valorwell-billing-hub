@@ -1481,6 +1481,7 @@ export type Database = {
           clinician_type: string | null
           created_at: string
           id: string
+          is_admin: boolean
           last_google_sync: string | null
           profile_id: string | null
           updated_at: string
@@ -1582,6 +1583,7 @@ export type Database = {
           clinician_type?: string | null
           created_at?: string
           id: string
+          is_admin?: boolean
           last_google_sync?: string | null
           profile_id?: string | null
           updated_at?: string
@@ -1683,6 +1685,7 @@ export type Database = {
           clinician_type?: string | null
           created_at?: string
           id?: string
+          is_admin?: boolean
           last_google_sync?: string | null
           profile_id?: string | null
           updated_at?: string
@@ -3540,6 +3543,10 @@ export type Database = {
           p_last_sync_hash: string
         }
         Returns: undefined
+      }
+      user_has_admin_privileges: {
+        Args: { user_id: string }
+        Returns: boolean
       }
       user_has_admin_role: {
         Args: { user_id: string }
