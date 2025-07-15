@@ -8,24 +8,23 @@ export function useSubmittedClaims() {
     queryFn: async () => {
       console.log('=== FETCHING SUBMITTED CLAIMS (FIXED QUERY) ===');
       
-      // Use a simpler, working query approach
+      // Query appointments with CMS1500_claims
       const { data, error } = await supabase
         .from('appointments')
         .select(`
           id,
           start_at,
-          cpt_code,
-          billed_amount,
-          claim_status,
-          claimid,
-          claim_last_submission_date,
-          insurance_paid_amount,
-          patient_responsibility_amount,
           client_id,
-          clinician_id
+          clinician_id,
+          CMS1500_claims!inner(
+            remote_claimid,
+            status,
+            last_submission,
+            proc_code,
+            charge
+          )
         `)
-        .not('claimid', 'is', null)
-        .order('claim_last_submission_date', { ascending: false });
+        .order('start_at', { ascending: false });
 
       console.log('=== RAW APPOINTMENTS QUERY RESULT ===');
       console.log('  Error:', error);
@@ -76,41 +75,45 @@ export function useSubmittedClaims() {
       const clinicianMap = new Map(clinicians?.map(c => [c.id, c]) || []);
 
       // Transform the data
-      const formattedClaims = data.map((appt, index) => {
-        console.log(`\n=== PROCESSING APPOINTMENT ${index + 1}/${data.length} ===`);
-        console.log('  Raw appointment:', appt);
-        
-        const client = clientMap.get(appt.client_id);
-        const clinician = clinicianMap.get(appt.clinician_id);
-        
-        console.log('  Found client:', client);
-        console.log('  Found clinician:', clinician);
-        
-        const formatted = {
-          id: appt.id,
-          start_at: appt.start_at,
-          claim_claimmd_id: appt.claimid || '',
-          insurance_paid_amount: appt.insurance_paid_amount,
-          patient_responsibility_amount: appt.patient_responsibility_amount,
-          client: {
-            id: client?.id || '',
-            name: client ? `${client.client_first_name || ''} ${client.client_last_name || ''}`.trim() : 'Unknown Client',
-            insurance: client?.client_insurance_company_primary || ''
-          },
-          provider: {
-            id: clinician?.id || '',
-            name: clinician ? `${clinician.clinician_first_name || ''} ${clinician.clinician_last_name || ''}`.trim() : 'Unknown Provider'
-          },
-          service: {
-            type: 'therapy_session',
-            cpt_code: appt.cpt_code || '',
-          },
-          billing: {
-            amount: appt.billed_amount || 0,
-            status: appt.claim_status || 'Unknown',
-            last_submitted: appt.claim_last_submission_date
-          }
-        };
+      const formattedClaims = data
+        .filter(appt => appt.CMS1500_claims.length > 0)
+        .map((appt, index) => {
+          console.log(`\n=== PROCESSING APPOINTMENT ${index + 1}/${data.length} ===`);
+          console.log('  Raw appointment:', appt);
+          
+          const client = clientMap.get(appt.client_id);
+          const clinician = clinicianMap.get(appt.clinician_id);
+          const claim = appt.CMS1500_claims[0]; // Get first claim
+          
+          console.log('  Found client:', client);
+          console.log('  Found clinician:', clinician);
+          console.log('  Found claim:', claim);
+          
+          const formatted = {
+            id: appt.id,
+            start_at: appt.start_at,
+            claim_claimmd_id: claim.remote_claimid || '',
+            insurance_paid_amount: null,
+            patient_responsibility_amount: null,
+            client: {
+              id: client?.id || '',
+              name: client ? `${client.client_first_name || ''} ${client.client_last_name || ''}`.trim() : 'Unknown Client',
+              insurance: client?.client_insurance_company_primary || ''
+            },
+            provider: {
+              id: clinician?.id || '',
+              name: clinician ? `${clinician.clinician_first_name || ''} ${clinician.clinician_last_name || ''}`.trim() : 'Unknown Provider'
+            },
+            service: {
+              type: 'therapy_session',
+              cpt_code: claim.proc_code || '',
+            },
+            billing: {
+              amount: claim.charge || 0,
+              status: claim.status || 'Unknown',
+              last_submitted: claim.last_submission
+            }
+          };
         
         console.log('  FORMATTED RESULT:');
         console.log('    claim_claimmd_id:', formatted.claim_claimmd_id);

@@ -27,11 +27,20 @@ export default function SubmittedClaimsTest() {
         setIsLoading(true);
         setError(null);
 
-        // Step 1: Get appointments with claims
+        // Step 1: Get appointments with claims from CMS1500_claims table
         const { data: appointments, error: apptError } = await supabase
           .from('appointments')
-          .select('id, start_at, claimid, claim_status, billed_amount, client_id, clinician_id')
-          .not('claimid', 'is', null)
+          .select(`
+            id, 
+            start_at, 
+            client_id, 
+            clinician_id,
+            CMS1500_claims!inner(
+              remote_claimid,
+              status,
+              charge
+            )
+          `)
           .order('start_at', { ascending: false })
           .limit(10);
 
@@ -75,20 +84,23 @@ export default function SubmittedClaimsTest() {
         const clientMap = new Map(clients?.map(c => [c.id, c]) || []);
         const clinicianMap = new Map(clinicians?.map(c => [c.id, c]) || []);
 
-        const formattedClaims: SimpleClaimData[] = appointments.map(appt => {
-          const client = clientMap.get(appt.client_id);
-          const clinician = clinicianMap.get(appt.clinician_id);
+        const formattedClaims: SimpleClaimData[] = appointments
+          .filter(appt => appt.CMS1500_claims.length > 0)
+          .map(appt => {
+            const client = clientMap.get(appt.client_id);
+            const clinician = clinicianMap.get(appt.clinician_id);
+            const claim = appt.CMS1500_claims[0]; // Get first claim
 
-          return {
-            id: appt.id,
-            start_at: appt.start_at,
-            claimid: appt.claimid || '',
-            claim_status: appt.claim_status || 'Unknown',
-            billed_amount: appt.billed_amount || 0,
-            client_name: client ? `${client.client_first_name || ''} ${client.client_last_name || ''}`.trim() : 'Unknown Client',
-            clinician_name: clinician ? `${clinician.clinician_first_name || ''} ${clinician.clinician_last_name || ''}`.trim() : 'Unknown Clinician'
-          };
-        });
+            return {
+              id: appt.id,
+              start_at: appt.start_at,
+              claimid: claim.remote_claimid || '',
+              claim_status: claim.status || 'Unknown',
+              billed_amount: claim.charge || 0,
+              client_name: client ? `${client.client_first_name || ''} ${client.client_last_name || ''}`.trim() : 'Unknown Client',
+              clinician_name: clinician ? `${clinician.clinician_first_name || ''} ${clinician.clinician_last_name || ''}`.trim() : 'Unknown Clinician'
+            };
+          });
 
         console.log('Final formatted claims:', formattedClaims.length);
         console.log('Sample claim:', formattedClaims[0]);

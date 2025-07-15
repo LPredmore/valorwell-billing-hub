@@ -1,82 +1,25 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  useEraList, 
-  useUnreconciledPayments,
-  useEraDetail,
-  useEraRetrieval
-} from "@/hooks/useClaimsData";
-import { Badge } from "@/components/ui/badge";
-import { Spinner } from "../ui/spinner";
-import { format, subMonths } from "date-fns";
+import { FileText, RefreshCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import PaymentDetails from "./PaymentDetails";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Calendar, FileText, RefreshCcw } from "lucide-react";
+import { format, subMonths } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { DateRangePicker } from "../ui/date-range-picker";
 
 const EraManagement = () => {
-  const { data: eraList, isLoading: loadingEras, refetch: refetchEraList } = useEraList();
-  const { data: unreconciledPayments, isLoading: loadingPayments, refetch: refetchPayments } = useUnreconciledPayments();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("all-eras");
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
-  const [selectedEraId, setSelectedEraId] = useState<string | null>(null);
-  const { data: eraDetail, isLoading: loadingEraDetail } = useEraDetail(selectedEraId || '');
-
+  const [isRetrievingEra, setIsRetrievingEra] = useState(false);
+  
   // Date range state for ERA retrieval
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subMonths(new Date(), 1), // Default to 1 month ago
+    from: subMonths(new Date(), 1),
     to: new Date(),
   });
-  
-  // Debug state for date range
-  const [lastUsedDateRange, setLastUsedDateRange] = useState<{from: string, to: string} | null>(null);
 
-  const { 
-    mutate: retrieveEraFiles, 
-    isPending: isRetrievingEra 
-  } = useEraRetrieval();
-
-  // Format currency amounts
-  const formatCurrency = (amount: number | null | undefined) => {
-    if (amount === null || amount === undefined) return '-';
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-  };
-  
-  // Format dates
-  const formatDate = (dateString: string | null | undefined) => {
-    if (!dateString) return '-';
-    try {
-      return format(new Date(dateString), 'MM/dd/yyyy');
-    } catch (error) {
-      return dateString;
-    }
-  };
-
-  // Handle payment selection
-  const handleSelectPayment = (appointmentId: string) => {
-    setSelectedAppointmentId(appointmentId);
-  };
-  
-  // Handle ERA selection for detail view
-  const handleSelectEra = (eraId: string) => {
-    setSelectedEraId(eraId);
-  };
-
-  // Handle ERA retrieval with date range
   const handleRetrieveEra = () => {
     if (!dateRange?.from) {
       toast({
@@ -87,34 +30,16 @@ const EraManagement = () => {
       return;
     }
 
-    // Format dates for API - ensure correct ISO format YYYY-MM-DD
-    const fromDate = dateRange.from.toISOString().split('T')[0];
-    const toDate = dateRange.to ? dateRange.to.toISOString().split('T')[0] : fromDate;
+    setIsRetrievingEra(true);
     
-    // Store the date range we're using for debugging
-    setLastUsedDateRange({from: fromDate, to: toDate});
-    
-    console.log(`Retrieving ERAs from ${fromDate} to ${toDate}`);
-
-    retrieveEraFiles(
-      { fromDate, toDate },
-      {
-        onSuccess: (data) => {
-          refetchEraList();
-          refetchPayments();
-          // Log the date range that was used in the request and response
-          console.log('ERA retrieval successful with date range:', data.dateRange);
-        },
-        onError: (error) => {
-          console.error('ERA retrieval failed:', error);
-          toast({
-            title: "Date range error",
-            description: "Failed to retrieve ERAs with the selected date range. Check console for details.",
-            variant: "destructive",
-          });
-        }
-      }
-    );
+    // Simulate ERA retrieval
+    setTimeout(() => {
+      setIsRetrievingEra(false);
+      toast({
+        title: "ERA Retrieval",
+        description: "ERA retrieval functionality will be available after ClaimMD integration is complete.",
+      });
+    }, 2000);
   };
 
   return (
@@ -156,109 +81,11 @@ const EraManagement = () => {
               </div>
             </CardHeader>
             <CardContent>
-              {lastUsedDateRange && (
-                <div className="mb-4 text-sm text-muted-foreground">
-                  Last search: {format(new Date(lastUsedDateRange.from), 'MMM dd, yyyy')} to {format(new Date(lastUsedDateRange.to), 'MMM dd, yyyy')}
-                </div>
-              )}
-              
-              {loadingEras ? (
-                <div className="flex justify-center py-8">
-                  <Spinner size="lg" />
-                </div>
-              ) : eraList && eraList.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ERA ID</TableHead>
-                      <TableHead>Payment Date</TableHead>
-                      <TableHead>Check/EFT #</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {eraList.map((era) => (
-                      <TableRow key={era.era_claimmd_id}>
-                        <TableCell className="font-medium">{era.era_claimmd_id}</TableCell>
-                        <TableCell>{formatDate(era.era_payment_date)}</TableCell>
-                        <TableCell>{era.era_check_eft_number || '-'}</TableCell>
-                        <TableCell>{formatCurrency(era.insurance_paid_amount)}</TableCell>
-                        <TableCell className="text-right">
-                          <Button 
-                            variant="outline" 
-                            onClick={() => handleSelectEra(era.era_claimmd_id)}
-                          >
-                            View Details
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  No ERA files have been processed yet.
-                </div>
-              )}
+              <div className="text-center py-8 text-muted-foreground">
+                ERA files will be available after ClaimMD integration is complete.
+              </div>
             </CardContent>
           </Card>
-
-          {selectedEraId && (
-            <Dialog open={!!selectedEraId} onOpenChange={() => setSelectedEraId(null)}>
-              <DialogContent className="max-w-3xl">
-                <DialogHeader>
-                  <DialogTitle>ERA Details - {selectedEraId}</DialogTitle>
-                </DialogHeader>
-                {loadingEraDetail ? (
-                  <div className="flex justify-center py-6">
-                    <Spinner size="lg" />
-                  </div>
-                ) : eraDetail && eraDetail.length > 0 ? (
-                  <div className="max-h-[500px] overflow-y-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Client</TableHead>
-                          <TableHead>Provider</TableHead>
-                          <TableHead>CPT</TableHead>
-                          <TableHead>Billed</TableHead>
-                          <TableHead>Paid</TableHead>
-                          <TableHead>Patient Resp.</TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {eraDetail.map((claim) => (
-                          <TableRow key={claim.id}>
-                            <TableCell className="font-medium">{claim.client_name}</TableCell>
-                            <TableCell>{claim.clinician_name}</TableCell>
-                            <TableCell>{claim.cpt_code || '-'}</TableCell>
-                            <TableCell>{formatCurrency(claim.billed_amount)}</TableCell>
-                            <TableCell>{formatCurrency(claim.insurance_paid_amount)}</TableCell>
-                            <TableCell>{formatCurrency(claim.patient_responsibility_amount)}</TableCell>
-                            <TableCell>
-                              <Badge className={
-                                claim.claim_status === 'Denied' 
-                                  ? 'bg-red-100 text-red-800 hover:bg-red-100'
-                                  : 'bg-green-100 text-green-800 hover:bg-green-100'
-                              }>
-                                {claim.claim_status}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No claims found for this ERA.
-                  </div>
-                )}
-              </DialogContent>
-            </Dialog>
-          )}
         </TabsContent>
         
         <TabsContent value="pending-reconciliation" className="space-y-4">
@@ -267,58 +94,13 @@ const EraManagement = () => {
               <CardTitle>Payments Pending Reconciliation</CardTitle>
             </CardHeader>
             <CardContent>
-              {loadingPayments ? (
-                <div className="flex justify-center py-8">
-                  <Spinner size="lg" />
-                </div>
-              ) : unreconciledPayments && unreconciledPayments.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Payment Date</TableHead>
-                      <TableHead>Check/EFT #</TableHead>
-                      <TableHead>Insurance Paid</TableHead>
-                      <TableHead>Patient Responsibility</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {unreconciledPayments.map((payment) => (
-                      <TableRow key={payment.id}>
-                        <TableCell className="font-medium">{payment.client_name}</TableCell>
-                        <TableCell>{formatDate(payment.era_payment_date)}</TableCell>
-                        <TableCell>{payment.era_check_eft_number || '-'}</TableCell>
-                        <TableCell>{formatCurrency(payment.insurance_paid_amount)}</TableCell>
-                        <TableCell>{formatCurrency(payment.patient_responsibility_amount)}</TableCell>
-                        <TableCell className="text-right">
-                          <Button 
-                            variant="outline" 
-                            onClick={() => handleSelectPayment(payment.id)}
-                          >
-                            Reconcile
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  No payments pending reconciliation.
-                </div>
-              )}
+              <div className="text-center py-8 text-muted-foreground">
+                Payment reconciliation will be available after ClaimMD integration is complete.
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-      
-      {selectedAppointmentId && (
-        <PaymentDetails
-          appointmentId={selectedAppointmentId}
-          onClose={() => setSelectedAppointmentId(null)}
-        />
-      )}
     </div>
   );
 };

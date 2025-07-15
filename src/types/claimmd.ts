@@ -57,7 +57,7 @@ export const eligibilityRequestSchema = z.object({
   ins_name_l: z.string().min(1, 'Subscriber last name is required'),
   ins_name_f: z.string().min(1, 'Subscriber first name is required'),
   ins_dob: z.string().regex(/^\d{8}$/, 'Subscriber date of birth must be in YYYYMMDD format'),
-  ins_sex: z.enum(['M', 'F', 'U'], { errorMap: () => ({ message: 'Gender must be M, F, or U' }) }),
+  ins_sex: z.enum(['M', 'F', 'U'], { message: 'Gender must be M, F, or U' }),
 
   // Payer Information - Required
   payerid: z.string().min(1, 'Payer ID is required'),

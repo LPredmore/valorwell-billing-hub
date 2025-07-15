@@ -2598,56 +2598,6 @@ export type Database = {
         }
         Relationships: []
       }
-      provider_profiles: {
-        Row: {
-          clinician_id: string | null
-          created_at: string | null
-          id: string
-          is_primary: boolean | null
-          license_numbers: Json | null
-          npi_number: string
-          specialties: string[] | null
-          status: string | null
-          tax_id: string | null
-          taxonomy_code: string
-          updated_at: string | null
-        }
-        Insert: {
-          clinician_id?: string | null
-          created_at?: string | null
-          id?: string
-          is_primary?: boolean | null
-          license_numbers?: Json | null
-          npi_number: string
-          specialties?: string[] | null
-          status?: string | null
-          tax_id?: string | null
-          taxonomy_code: string
-          updated_at?: string | null
-        }
-        Update: {
-          clinician_id?: string | null
-          created_at?: string | null
-          id?: string
-          is_primary?: boolean | null
-          license_numbers?: Json | null
-          npi_number?: string
-          specialties?: string[] | null
-          status?: string | null
-          tax_id?: string | null
-          taxonomy_code?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "provider_profiles_clinician_id_fkey"
-            columns: ["clinician_id"]
-            isOneToOne: false
-            referencedRelation: "clinicians"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       real_time_notifications: {
         Row: {
           created_at: string

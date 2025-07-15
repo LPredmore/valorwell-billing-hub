@@ -33,7 +33,7 @@ export function validateEligibilityRequest(data: any): ValidationResult<Eligibil
     if (error instanceof z.ZodError) {
       const formattedErrors: Record<string, string[]> = {};
       
-      error.errors.forEach((err) => {
+      error.issues.forEach((err) => {
         const field = err.path.join('.');
         if (!formattedErrors[field]) {
           formattedErrors[field] = [];
@@ -107,7 +107,7 @@ export function validateProviderData(data: any): ValidationResult<ProviderData> 
     if (error instanceof z.ZodError) {
       const formattedErrors: Record<string, string[]> = {};
       
-      error.errors.forEach((err) => {
+      error.issues.forEach((err) => {
         const field = err.path.join('.');
         if (!formattedErrors[field]) {
           formattedErrors[field] = [];
@@ -194,7 +194,7 @@ export function validateClientData(data: any): ValidationResult<ClientData> {
     if (error instanceof z.ZodError) {
       const formattedErrors: Record<string, string[]> = {};
       
-      error.errors.forEach((err) => {
+      error.issues.forEach((err) => {
         const field = err.path.join('.');
         if (!formattedErrors[field]) {
           formattedErrors[field] = [];

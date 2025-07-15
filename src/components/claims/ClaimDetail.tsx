@@ -1,294 +1,212 @@
-import { useState, useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import React, { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { X, Save, Loader2, Clock, FileText } from "lucide-react";
-import { useForm } from "react-hook-form";
-import { useBillableAppointments, useUpdateBillingDetails, useClaimHistory } from "@/hooks/useClaimsData";
-import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import PaymentDetails from "./PaymentDetails";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, X } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface ClaimDetailProps {
   appointmentId: string;
   onClose: () => void;
 }
 
-export default function ClaimDetail({
-  appointmentId,
-  onClose,
-}: ClaimDetailProps) {
-  const [appointment, setAppointment] = useState<any>(null);
-  const { data: appointments } = useBillableAppointments();
-  const { mutate: updateBillingDetails, isPending } = useUpdateBillingDetails();
-  const { data: claimHistory, isLoading: isLoadingHistory } = useClaimHistory(appointmentId);
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    if (appointments) {
-      const found = appointments.find((appt) => appt.id === appointmentId);
-      if (found) {
-        setAppointment(found);
-      }
-    }
-  }, [appointmentId, appointments]);
-
-  const form = useForm({
-    defaultValues: {
-      cpt_code: appointment?.service.cpt_code || "",
-      modifiers: appointment?.service.modifiers?.join(", ") || "",
-      diagnosis_code_pointers: appointment?.service.diagnosis_pointers || "",
-      place_of_service_code: appointment?.service.place_of_service || "11", // Default to office
-      billed_amount: appointment?.billing.amount || 0,
-    },
-  });
-
-  useEffect(() => {
-    if (appointment) {
-      form.reset({
-        cpt_code: appointment.service.cpt_code || "",
-        modifiers: appointment.service.modifiers?.join(", ") || "",
-        diagnosis_code_pointers: appointment.service.diagnosis_pointers || "",
-        place_of_service_code: appointment.service.place_of_service || "11",
-        billed_amount: appointment.billing.amount || 0,
-      });
-    }
-  }, [appointment, form]);
-
-  const onSubmit = (data: any) => {
-    // Parse modifiers from comma-separated string to array
-    const modifiers = data.modifiers ? data.modifiers.split(",").map((m: string) => m.trim()) : [];
-    
-    // Convert billed_amount to number
-    const billed_amount = parseFloat(data.billed_amount);
-    
-    updateBillingDetails(
-      {
-        appointmentId,
-        billingDetails: {
-          ...data,
-          modifiers,
-          billed_amount,
-        },
-      },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['billableAppointments'] });
-        },
-      }
-    );
+interface AppointmentData {
+  id: string;
+  start_at: string;
+  client_id: string;
+  clinician_id: string;
+  clients?: {
+    client_first_name: string;
+    client_last_name: string;
   };
+  clinicians?: {
+    clinician_first_name: string;
+    clinician_last_name: string;
+  };
+  CMS1500_claims?: Array<{
+    remote_claimid: string;
+    status: string;
+    last_submission: string;
+    proc_code: string;
+    charge: number;
+  }>;
+}
 
-  if (!appointment) {
+export default function ClaimDetail({ appointmentId, onClose }: ClaimDetailProps) {
+  const [appointment, setAppointment] = useState<AppointmentData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    async function fetchAppointment() {
+      try {
+        const { data, error } = await supabase
+          .from('appointments')
+          .select(`
+            id,
+            start_at,
+            client_id,
+            clinician_id,
+            clients:client_id(
+              client_first_name,
+              client_last_name
+            ),
+            clinicians:clinician_id(
+              clinician_first_name,
+              clinician_last_name
+            ),
+            CMS1500_claims(
+              remote_claimid,
+              status,
+              last_submission,
+              proc_code,
+              charge
+            )
+          `)
+          .eq('id', appointmentId)
+          .single();
+
+        if (error) throw error;
+        setAppointment(data);
+      } catch (error) {
+        console.error('Error fetching appointment:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load appointment details",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchAppointment();
+  }, [appointmentId, toast]);
+
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-6">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex justify-center p-8">
+        <Loader2 className="h-6 w-6 animate-spin" />
       </div>
     );
   }
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString();
-  };
+  if (!appointment) {
+    return (
+      <div className="text-center p-8">
+        <p>Appointment not found</p>
+      </div>
+    );
+  }
+
+  const claim = appointment.CMS1500_claims?.[0];
+  const clientName = appointment.clients 
+    ? `${appointment.clients.client_first_name} ${appointment.clients.client_last_name}`
+    : 'Unknown Client';
+  const clinicianName = appointment.clinicians
+    ? `${appointment.clinicians.clinician_first_name} ${appointment.clinicians.clinician_last_name}`
+    : 'Unknown Clinician';
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-medium">{appointment.client.name}</h3>
-          <p className="text-sm text-muted-foreground">
-            {new Date(appointment.start_at).toLocaleDateString()} | {appointment.provider.name}
-          </p>
-        </div>
-        <Button variant="ghost" size="icon" onClick={onClose}>
+        <h2 className="text-2xl font-bold">Claim Details</h2>
+        <Button variant="ghost" size="sm" onClick={onClose}>
           <X className="h-4 w-4" />
         </Button>
       </div>
 
-      <Separator />
+      <div className="grid grid-cols-2 gap-4 text-sm">
+        <div>
+          <Label className="font-medium">Client:</Label>
+          <p>{clientName}</p>
+        </div>
+        <div>
+          <Label className="font-medium">Clinician:</Label>
+          <p>{clinicianName}</p>
+        </div>
+        <div>
+          <Label className="font-medium">Date:</Label>
+          <p>{new Date(appointment.start_at).toLocaleDateString()}</p>
+        </div>
+        {claim && (
+          <div>
+            <Label className="font-medium">Claim ID:</Label>
+            <p>{claim.remote_claimid}</p>
+          </div>
+        )}
+      </div>
 
       <Tabs defaultValue="billing">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="billing">Billing Details</TabsTrigger>
-          <TabsTrigger value="claim" disabled={!claimHistory?.claimid}>
+          <TabsTrigger value="claim" disabled={!claim}>
             Claim Status
           </TabsTrigger>
         </TabsList>
         
         <TabsContent value="billing">
           <Card>
-            <CardContent className="p-4">
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <CardHeader>
+              <CardTitle>Billing Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {claim ? (
+                <>
                   <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="cpt_code"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>CPT Code</FormLabel>
-                          <FormControl>
-                            <Input placeholder="90834" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="modifiers"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Modifiers</FormLabel>
-                          <FormControl>
-                            <Input placeholder="95, GT (comma separated)" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div>
+                      <Label htmlFor="cpt_code">CPT Code</Label>
+                      <Input 
+                        id="cpt_code" 
+                        value={claim.proc_code || ''} 
+                        readOnly 
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="billed_amount">Billed Amount</Label>
+                      <Input 
+                        id="billed_amount" 
+                        value={`$${claim.charge?.toFixed(2) || '0.00'}`} 
+                        readOnly 
+                      />
+                    </div>
                   </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="place_of_service_code"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Place of Service</FormLabel>
-                          <FormControl>
-                            <Input placeholder="11" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="billed_amount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Billed Amount</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.01" min="0" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  
-                  <FormField
-                    control={form.control}
-                    name="diagnosis_code_pointers"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Diagnosis Pointers</FormLabel>
-                        <FormControl>
-                          <Textarea placeholder="1,2" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <div className="flex justify-end">
-                    <Button type="submit" disabled={isPending}>
-                      {isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Saving
-                        </>
-                      ) : (
-                        <>
-                          <Save className="mr-2 h-4 w-4" />
-                          Save Details
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              </Form>
+                </>
+              ) : (
+                <p className="text-muted-foreground">No billing information available for this appointment.</p>
+              )}
             </CardContent>
           </Card>
-          
-          {/* Payment Details Section */}
-          <PaymentDetails appointmentId={appointmentId} />
         </TabsContent>
         
         <TabsContent value="claim">
-          {isLoadingHistory ? (
-            <div className="flex items-center justify-center p-6">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : claimHistory ? (
-            <Card>
-              <CardContent className="p-4">
-                <h3 className="text-lg font-medium mb-3">Claim Information</h3>
-                <div className="space-y-3 text-sm">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="font-medium">Claim ID:</div>
-                    <div>{claimHistory.claimid || 'N/A'}</div>
-                    
-                    <div className="font-medium">Batch ID:</div>
-                    <div>{claimHistory.claim_claimmd_batch_id || 'N/A'}</div>
-                    
-                    <div className="font-medium">Submission Date:</div>
-                    <div>{formatDate(claimHistory.claim_last_submission_date)}</div>
-                    
-                    <div className="font-medium">Status:</div>
-                    <div className={
-                      claimHistory.claim_status === 'Denied' || 
-                      claimHistory.claim_status?.includes('Rejected') ? 
-                      'text-red-600 font-medium' : 
-                      claimHistory.claim_status?.includes('Paid') ? 
-                      'text-green-600 font-medium' : ''
-                    }>
-                      {claimHistory.claim_status || 'Unknown'}
+          <Card>
+            <CardHeader>
+              <CardTitle>Claim Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {claim ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <Label className="font-medium">Status:</Label>
+                      <Badge variant="secondary">{claim.status}</Badge>
+                    </div>
+                    <div>
+                      <Label className="font-medium">Last Submission:</Label>
+                      <p>{claim.last_submission ? new Date(claim.last_submission).toLocaleDateString() : 'Not submitted'}</p>
                     </div>
                   </div>
-                  
-                  {claimHistory.claim_response_json && (
-                    <>
-                      <Separator className="my-2" />
-                      <div className="mt-2">
-                        <div className="mb-2 flex items-center text-sm text-muted-foreground">
-                          <Clock className="h-4 w-4 mr-1" />
-                          Status History
-                        </div>
-                        <div className="bg-gray-50 p-3 rounded text-xs overflow-auto max-h-[300px]">
-                          {typeof claimHistory.claim_response_json === 'string' ? (
-                            <pre>{claimHistory.claim_response_json}</pre>
-                          ) : (
-                            <pre>{JSON.stringify(claimHistory.claim_response_json, null, 2)}</pre>
-                          )}
-                        </div>
-                      </div>
-                    </>
-                  )}
                 </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="text-center p-4 text-muted-foreground">
-              <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>No claim information available</p>
-            </div>
-          )}
-          
-          {/* Payment Details Section */}
-          <PaymentDetails appointmentId={appointmentId} />
+              ) : (
+                <p className="text-muted-foreground">No claim information available.</p>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

@@ -70,30 +70,36 @@ export function useEnhancedSubmittedClaims() {
         .select(`
           id,
           start_at,
-          cpt_code,
-          modifiers,
-          diagnosis_code_pointers,
-          place_of_service_code,
-          billed_amount,
-          claim_status,
-          claimid,
-          claim_last_submission_date,
-          claim_status_last_checked,
-          claim_response_json,
-          denial_details_json,
-          insurance_paid_amount,
-          patient_responsibility_amount,
-          insurance_adjustment_amount,
-          insurance_adjustment_details_json,
-          era_payment_date,
-          era_check_eft_number,
-          era_claimmd_id,
-          billing_notes,
+          notes,
           client_id,
-          clinician_id
+          clinician_id,
+          clients:client_id(
+            client_first_name,
+            client_last_name,
+            client_insurance_company_primary
+          ),
+          clinicians:clinician_id(
+            clinician_first_name,
+            clinician_last_name
+          ),
+          CMS1500_claims!inner(
+            remote_claimid,
+            status,
+            last_submission,
+            last_status_check,
+            claim_md_batch_id,
+            proc_code,
+            mod_1,
+            mod_2,
+            mod_3,
+            mod_4,
+            place_of_service,
+            diag_ref,
+            charge,
+            response_json
+          )
         `)
-        .not('claimid', 'is', null)
-        .order('claim_last_submission_date', { ascending: false });
+        .order('start_at', { ascending: false });
 
       if (error) {
         console.error('ERROR: Database query failed:', error);
@@ -105,86 +111,65 @@ export function useEnhancedSubmittedClaims() {
         return [];
       }
 
-      // Get unique client and clinician IDs
-      const clientIds = [...new Set(data.map(a => a.client_id))];
-      const clinicianIds = [...new Set(data.map(a => a.clinician_id))];
-
-      // Fetch clients and clinicians
-      const [clientsResult, cliniciansResult] = await Promise.all([
-        supabase
-          .from('clients')
-          .select('id, client_first_name, client_last_name, client_insurance_company_primary')
-          .in('id', clientIds),
-        supabase
-          .from('clinicians')
-          .select('id, clinician_first_name, clinician_last_name')
-          .in('id', clinicianIds)
-      ]);
-
-      if (clientsResult.error || cliniciansResult.error) {
-        console.error('ERROR: Failed to fetch related data');
-        throw clientsResult.error || cliniciansResult.error;
-      }
-
-      // Create lookup maps
-      const clientMap = new Map(clientsResult.data?.map(c => [c.id, c]) || []);
-      const clinicianMap = new Map(cliniciansResult.data?.map(c => [c.id, c]) || []);
+      console.log(`Found ${data.length} appointments with claims`);
 
       // Transform the data into enhanced format
-      const enhancedClaims: EnhancedSubmittedClaim[] = data.map(appt => {
-        const client = clientMap.get(appt.client_id);
-        const clinician = clinicianMap.get(appt.clinician_id);
-        
-        return {
-          id: appt.id,
-          start_at: appt.start_at,
-          claim_claimmd_id: appt.claimid || '',
+      const enhancedClaims: EnhancedSubmittedClaim[] = data
+        .filter(appt => appt.CMS1500_claims.length > 0)
+        .map(appt => {
+          const claim = appt.CMS1500_claims[0]; // Get first claim
+          const modifiers = [claim.mod_1, claim.mod_2, claim.mod_3, claim.mod_4].filter(Boolean);
           
-          client: {
-            id: client?.id || '',
-            name: client ? `${client.client_first_name || ''} ${client.client_last_name || ''}`.trim() : 'Unknown Client',
-            insurance: client?.client_insurance_company_primary || ''
-          },
-          
-          provider: {
-            id: clinician?.id || '',
-            name: clinician ? `${clinician.clinician_first_name || ''} ${clinician.clinician_last_name || ''}`.trim() : 'Unknown Provider'
-          },
-          
-          clinical: {
-            cpt_code: appt.cpt_code || '',
-            modifiers: appt.modifiers || [],
-            diagnosis_code_pointers: appt.diagnosis_code_pointers || '',
-            place_of_service_code: appt.place_of_service_code || ''
-          },
-          
-          financial: {
-            billed_amount: appt.billed_amount || 0,
-            insurance_paid_amount: appt.insurance_paid_amount,
-            patient_responsibility_amount: appt.patient_responsibility_amount,
-            insurance_adjustment_amount: appt.insurance_adjustment_amount,
-            insurance_adjustment_details: appt.insurance_adjustment_details_json
-          },
-          
-          status: {
-            claim_status: appt.claim_status || 'Unknown',
-            last_submission_date: appt.claim_last_submission_date,
-            last_status_check: appt.claim_status_last_checked,
-            response_details: appt.claim_response_json,
-            denial_details: appt.denial_details_json
-          },
-          
-          payment: {
-            era_payment_date: appt.era_payment_date,
-            era_check_eft_number: appt.era_check_eft_number,
-            era_claimmd_id: appt.era_claimmd_id
-          },
-          
-          notes: {
-            billing_notes: appt.billing_notes
-          }
-        };
-      });
+          return {
+            id: appt.id,
+            start_at: appt.start_at,
+            claim_claimmd_id: claim.remote_claimid || '',
+            
+            client: {
+              id: appt.client_id,
+              name: appt.clients ? `${appt.clients.client_first_name || ''} ${appt.clients.client_last_name || ''}`.trim() : 'Unknown Client',
+              insurance: appt.clients?.client_insurance_company_primary || ''
+            },
+            
+            provider: {
+              id: appt.clinician_id,
+              name: appt.clinicians ? `${appt.clinicians.clinician_first_name || ''} ${appt.clinicians.clinician_last_name || ''}`.trim() : 'Unknown Provider'
+            },
+            
+            clinical: {
+              cpt_code: claim.proc_code || '',
+              modifiers: modifiers,
+              diagnosis_code_pointers: claim.diag_ref || '',
+              place_of_service_code: claim.place_of_service || ''
+            },
+            
+            financial: {
+              billed_amount: claim.charge || 0,
+              insurance_paid_amount: null,
+              patient_responsibility_amount: null,
+              insurance_adjustment_amount: null,
+              insurance_adjustment_details: null
+            },
+            
+            status: {
+              claim_status: claim.status || 'Unknown',
+              last_submission_date: claim.last_submission,
+              last_status_check: claim.last_status_check,
+              response_details: claim.response_json,
+              denial_details: null
+            },
+            
+            payment: {
+              era_payment_date: null,
+              era_check_eft_number: null,
+              era_claimmd_id: null
+            },
+            
+            notes: {
+              billing_notes: appt.notes
+            }
+          };
+        });
 
       console.log(`=== ENHANCED CLAIMS PROCESSED: ${enhancedClaims.length} ===`);
       return enhancedClaims;
