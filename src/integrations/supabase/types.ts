@@ -49,37 +49,76 @@ export type Database = {
       }
       api_logs: {
         Row: {
+          client_context: Json | null
           client_id: string | null
+          correlation_id: string | null
           created_at: string
           endpoint: string
+          error_category: Database["public"]["Enums"]["error_category"] | null
           error_message: string | null
+          error_severity: Database["public"]["Enums"]["error_severity"] | null
           id: string
           processing_time_ms: number | null
           request_payload: Json | null
+          resolution_notes: string | null
+          resolution_status:
+            | Database["public"]["Enums"]["resolution_status"]
+            | null
+          resolved_at: string | null
+          resolved_by: string | null
           response_data: Json | null
+          response_time_ms: number | null
+          retry_count: number | null
           status: string
+          user_context: Json | null
         }
         Insert: {
+          client_context?: Json | null
           client_id?: string | null
+          correlation_id?: string | null
           created_at?: string
           endpoint: string
+          error_category?: Database["public"]["Enums"]["error_category"] | null
           error_message?: string | null
+          error_severity?: Database["public"]["Enums"]["error_severity"] | null
           id?: string
           processing_time_ms?: number | null
           request_payload?: Json | null
+          resolution_notes?: string | null
+          resolution_status?:
+            | Database["public"]["Enums"]["resolution_status"]
+            | null
+          resolved_at?: string | null
+          resolved_by?: string | null
           response_data?: Json | null
+          response_time_ms?: number | null
+          retry_count?: number | null
           status: string
+          user_context?: Json | null
         }
         Update: {
+          client_context?: Json | null
           client_id?: string | null
+          correlation_id?: string | null
           created_at?: string
           endpoint?: string
+          error_category?: Database["public"]["Enums"]["error_category"] | null
           error_message?: string | null
+          error_severity?: Database["public"]["Enums"]["error_severity"] | null
           id?: string
           processing_time_ms?: number | null
           request_payload?: Json | null
+          resolution_notes?: string | null
+          resolution_status?:
+            | Database["public"]["Enums"]["resolution_status"]
+            | null
+          resolved_at?: string | null
+          resolved_by?: string | null
           response_data?: Json | null
+          response_time_ms?: number | null
+          retry_count?: number | null
           status?: string
+          user_context?: Json | null
         }
         Relationships: [
           {
@@ -2047,6 +2086,86 @@ export type Database = {
           },
         ]
       }
+      error_monitoring: {
+        Row: {
+          alert_enabled: boolean
+          created_at: string
+          error_pattern: string
+          id: string
+          last_triggered_at: string | null
+          threshold_count: number
+          time_window_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          alert_enabled?: boolean
+          created_at?: string
+          error_pattern: string
+          id?: string
+          last_triggered_at?: string | null
+          threshold_count?: number
+          time_window_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          alert_enabled?: boolean
+          created_at?: string
+          error_pattern?: string
+          id?: string
+          last_triggered_at?: string | null
+          threshold_count?: number
+          time_window_minutes?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      error_resolution_workflow: {
+        Row: {
+          actual_resolution_time: unknown | null
+          api_log_id: string
+          assigned_to: string | null
+          created_at: string
+          estimated_resolution_time: unknown | null
+          id: string
+          priority: number
+          stage_notes: string | null
+          updated_at: string
+          workflow_stage: string
+        }
+        Insert: {
+          actual_resolution_time?: unknown | null
+          api_log_id: string
+          assigned_to?: string | null
+          created_at?: string
+          estimated_resolution_time?: unknown | null
+          id?: string
+          priority?: number
+          stage_notes?: string | null
+          updated_at?: string
+          workflow_stage?: string
+        }
+        Update: {
+          actual_resolution_time?: unknown | null
+          api_log_id?: string
+          assigned_to?: string | null
+          created_at?: string
+          estimated_resolution_time?: unknown | null
+          id?: string
+          priority?: number
+          stage_notes?: string | null
+          updated_at?: string
+          workflow_stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "error_resolution_workflow_api_log_id_fkey"
+            columns: ["api_log_id"]
+            isOneToOne: false
+            referencedRelation: "api_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       external_calendar_mappings: {
         Row: {
           appointment_id: string
@@ -3051,6 +3170,33 @@ export type Database = {
           },
         ]
       }
+      system_health_metrics: {
+        Row: {
+          context: Json | null
+          id: string
+          metric_name: string
+          metric_type: string
+          metric_value: number
+          recorded_at: string
+        }
+        Insert: {
+          context?: Json | null
+          id?: string
+          metric_name: string
+          metric_type: string
+          metric_value: number
+          recorded_at?: string
+        }
+        Update: {
+          context?: Json | null
+          id?: string
+          metric_name?: string
+          metric_type?: string
+          metric_value?: number
+          recorded_at?: string
+        }
+        Relationships: []
+      }
       system_settings: {
         Row: {
           created_at: string | null
@@ -3240,6 +3386,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      categorize_error: {
+        Args: { error_message: string; endpoint: string; status: string }
+        Returns: Database["public"]["Enums"]["error_category"]
+      }
       check_blocked_time_integrity: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3248,6 +3398,10 @@ export type Database = {
           count: number
           message: string
         }[]
+      }
+      check_error_thresholds: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       check_table_exists: {
         Args: { check_table_name: string }
@@ -3301,6 +3455,13 @@ export type Database = {
           record_id: string
         }
         Returns: boolean
+      }
+      determine_error_severity: {
+        Args: {
+          error_category: Database["public"]["Enums"]["error_category"]
+          retry_count: number
+        }
+        Returns: Database["public"]["Enums"]["error_severity"]
       }
       format_date_for_claimmd: {
         Args: { input_date: string }
@@ -3433,6 +3594,15 @@ export type Database = {
         | "consent_form"
         | "therapy_note"
         | "questionnaire"
+      error_category:
+        | "api_authentication"
+        | "network_error"
+        | "data_validation"
+        | "rate_limiting"
+        | "provider_enrollment"
+        | "payer_specific"
+        | "system_error"
+      error_severity: "critical" | "high" | "medium" | "low" | "informational"
       event_type: "appointment" | "time_off" | "availability"
       insurance_type:
         | "PPO"
@@ -3443,6 +3613,12 @@ export type Database = {
         | "Medicaid"
         | "CHIP"
         | "Other"
+      resolution_status:
+        | "new"
+        | "in_progress"
+        | "resolved"
+        | "escalated"
+        | "closed"
       states:
         | "Alabama"
         | "Alaska"
@@ -3679,6 +3855,16 @@ export const Constants = {
         "therapy_note",
         "questionnaire",
       ],
+      error_category: [
+        "api_authentication",
+        "network_error",
+        "data_validation",
+        "rate_limiting",
+        "provider_enrollment",
+        "payer_specific",
+        "system_error",
+      ],
+      error_severity: ["critical", "high", "medium", "low", "informational"],
       event_type: ["appointment", "time_off", "availability"],
       insurance_type: [
         "PPO",
@@ -3689,6 +3875,13 @@ export const Constants = {
         "Medicaid",
         "CHIP",
         "Other",
+      ],
+      resolution_status: [
+        "new",
+        "in_progress",
+        "resolved",
+        "escalated",
+        "closed",
       ],
       states: [
         "Alabama",

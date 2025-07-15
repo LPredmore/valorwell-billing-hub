@@ -5,6 +5,86 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { callClaimMdApi } from '../shared/claimmd-api.ts';
 import { formatEligibilityPayload, getClaimMdErrorMessage, determineEligibilityStatus } from '../shared/claimmd-formatter.ts';
 
+// Enhanced logging structure
+interface LogEntry {
+  endpoint: string;
+  status: string;
+  error_message?: string;
+  error_category?: string;
+  error_severity?: string;
+  correlation_id: string;
+  user_context?: Record<string, any>;
+  client_context?: Record<string, any>;
+  request_payload?: Record<string, any>;
+  response_data?: Record<string, any>;
+  response_time_ms?: number;
+  client_id?: string;
+  retry_count?: number;
+}
+
+// Error categorization function
+function categorizeError(errorMessage: string, errorCode?: string): string {
+  if (errorCode === '20' || errorMessage.includes('api key') || errorMessage.includes('authentication')) {
+    return 'api_authentication';
+  }
+  if (errorMessage.includes('timeout') || errorMessage.includes('connection') || errorMessage.includes('network')) {
+    return 'network_error';
+  }
+  if (errorCode === '75' || errorCode === '72' || errorMessage.includes('validation') || errorMessage.includes('invalid') || errorMessage.includes('missing')) {
+    return 'data_validation';
+  }
+  if (errorMessage.includes('rate limit') || errorMessage.includes('too many requests')) {
+    return 'rate_limiting';
+  }
+  if (errorMessage.includes('not enrolled') || errorMessage.includes('provider')) {
+    return 'provider_enrollment';
+  }
+  if (errorMessage.includes('payer') || errorMessage.includes('unavailable') || errorMessage.includes('service disrupted')) {
+    return 'payer_specific';
+  }
+  return 'system_error';
+}
+
+// Determine error severity
+function determineErrorSeverity(category: string, retryCount: number = 0): string {
+  switch (category) {
+    case 'api_authentication':
+      return 'critical';
+    case 'system_error':
+      return retryCount > 3 ? 'critical' : 'high';
+    case 'network_error':
+      return retryCount > 5 ? 'high' : 'medium';
+    case 'rate_limiting':
+      return 'medium';
+    case 'data_validation':
+      return 'low';
+    case 'provider_enrollment':
+    case 'payer_specific':
+      return 'medium';
+    default:
+      return 'medium';
+  }
+}
+
+// Enhanced logging function
+async function logApiActivity(supabase: any, logEntry: LogEntry): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('api_logs')
+      .insert({
+        ...logEntry,
+        created_at: new Date().toISOString(),
+        processing_time_ms: logEntry.response_time_ms || 0
+      });
+    
+    if (error) {
+      console.error('Failed to log API activity:', error);
+    }
+  } catch (err) {
+    console.error('Logging service error:', err);
+  }
+}
+
 // CORS headers for browser requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,6 +98,9 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as s
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 serve(async (req) => {
+  const startTime = Date.now();
+  const correlationId = crypto.randomUUID();
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -26,6 +109,16 @@ serve(async (req) => {
   try {
     // Only accept POST requests
     if (req.method !== 'POST') {
+      await logApiActivity(supabase, {
+        endpoint: 'eligdata/',
+        status: 'error',
+        error_message: 'Method not allowed',
+        error_category: 'data_validation',
+        error_severity: 'low',
+        correlation_id: correlationId,
+        response_time_ms: Date.now() - startTime
+      });
+      
       return new Response(JSON.stringify({ error: 'Method not allowed' }), {
         status: 405,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -36,13 +129,23 @@ serve(async (req) => {
     const { clientId } = await req.json();
 
     if (!clientId) {
+      await logApiActivity(supabase, {
+        endpoint: 'eligdata/',
+        status: 'error',
+        error_message: 'Client ID is required',
+        error_category: 'data_validation',
+        error_severity: 'low',
+        correlation_id: correlationId,
+        response_time_ms: Date.now() - startTime
+      });
+      
       return new Response(JSON.stringify({ error: 'Client ID is required' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    console.log(`Checking eligibility for client: ${clientId}`);
+    console.log(`Checking eligibility for client: ${clientId} (correlation: ${correlationId})`);
 
     // Get client information
     const { data: clientData, error: clientError } = await supabase
@@ -149,6 +252,30 @@ serve(async (req) => {
       const interpretedError = errorCode ? getClaimMdErrorMessage(errorCode) : 'Unknown API error';
       const formattedErrorDetails = `${errorMsg || interpretedError} (Code: ${errorCode || 'unknown'})`;
 
+      // Enhanced error logging
+      const errorCategory = categorizeError(errorDetails, errorCode);
+      const errorSeverity = determineErrorSeverity(errorCategory);
+      
+      await logApiActivity(supabase, {
+        endpoint: 'eligdata/',
+        status: 'error',
+        error_message: formattedErrorDetails,
+        error_category: errorCategory,
+        error_severity: errorSeverity,
+        correlation_id: correlationId,
+        client_id: clientId,
+        user_context: { user_type: 'system' },
+        client_context: {
+          age_range: clientData.client_age ? `${Math.floor(clientData.client_age / 10) * 10}s` : undefined,
+          state: clientData.client_state,
+          insurance_type: clientData.client_insurance_type_primary,
+          payer_id: clientData.client_primary_payer_id
+        },
+        request_payload: eligibilityPayload,
+        response_data: eligibilityResponse.data,
+        response_time_ms: Date.now() - startTime
+      });
+
       // Update client record with specific error information
       await supabase
         .from('clients')
@@ -159,7 +286,8 @@ serve(async (req) => {
             error: formattedErrorDetails,
             timestamp: new Date().toISOString(),
             requestId: eligibilityPayload.request_id,
-            originalErrorData: eligibilityResponse.data?.error || errorDetails
+            originalErrorData: eligibilityResponse.data?.error || errorDetails,
+            correlation_id: correlationId
           }
         })
         .eq('id', clientId);
@@ -168,7 +296,8 @@ serve(async (req) => {
         error: 'Eligibility check failed',
         details: formattedErrorDetails,
         errorCode: errorCode || 'unknown',
-        userMessage: interpretedError
+        userMessage: interpretedError,
+        correlationId: correlationId
       }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -232,6 +361,29 @@ serve(async (req) => {
       console.error('Error updating client with eligibility data:', updateError);
     }
 
+    // Log successful operation
+    await logApiActivity(supabase, {
+      endpoint: 'eligdata/',
+      status: 'success',
+      correlation_id: correlationId,
+      client_id: clientId,
+      user_context: { user_type: 'system' },
+      client_context: {
+        age_range: clientData.client_age ? `${Math.floor(clientData.client_age / 10) * 10}s` : undefined,
+        state: clientData.client_state,
+        insurance_type: clientData.client_insurance_type_primary,
+        payer_id: clientData.client_primary_payer_id
+      },
+      request_payload: eligibilityPayload,
+      response_data: {
+        status: finalStatus,
+        copay: copay,
+        deductible: deductible,
+        coinsurancePercent: coinsurancePercent
+      },
+      response_time_ms: Date.now() - startTime
+    });
+
     // Return the eligibility results with more detailed information
     return new Response(JSON.stringify({
       success: true,
@@ -247,7 +399,8 @@ serve(async (req) => {
         benefitInfo: result.benefitsInformation || result.elig?.benefit || null,
         planInfo: result.planInformation || result.elig?.plan_name || null,
         providerInfo: result.providerInformation || null
-      }
+      },
+      correlationId: correlationId
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -256,9 +409,21 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error processing eligibility request:', error);
 
+    // Log unexpected system errors
+    await logApiActivity(supabase, {
+      endpoint: 'eligdata/',
+      status: 'error',
+      error_message: error instanceof Error ? error.message : String(error),
+      error_category: 'system_error',
+      error_severity: 'critical',
+      correlation_id: correlationId,
+      response_time_ms: Date.now() - startTime
+    });
+
     return new Response(JSON.stringify({
       error: 'Internal server error',
-      details: error instanceof Error ? error.message : String(error)
+      details: error instanceof Error ? error.message : String(error),
+      correlationId: correlationId
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
