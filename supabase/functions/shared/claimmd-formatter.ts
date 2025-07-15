@@ -3,9 +3,12 @@
 /**
  * This module provides utilities for formatting data to meet Claim.MD API's 
  * specific format requirements, such as date formatting and code mapping.
+ * 
+ * Note: This is the edge function version. For client-side validation,
+ * use the enhanced validation functions in src/utils/claimdValidation.ts
  */
 
-// Define interfaces for type safety
+// Define interfaces for type safety - simplified for edge function use
 interface ClaimMdResponse {
   elig?: {
     error?: Array<{error_code?: string; error_mesg?: string}>;
@@ -19,8 +22,10 @@ interface ClaimMdResponse {
     ins_dob?: string;
     ins_sex?: string;
     ins_number?: string;
+    eligid?: string;
     [key: string]: any;
   };
+  id?: string;
   error?: string | {error_code?: string; error_mesg?: string; [key: string]: any};
   originalErrorData?: {error_code?: string; error_mesg?: string; [key: string]: any};
   [key: string]: any;
@@ -55,6 +60,9 @@ export function formatGender(gender: string | null): string {
 /**
  * Formats eligibility request payload for Claim.MD's eligdata/ endpoint
  * 
+ * This is the edge function version with basic validation.
+ * For comprehensive validation, use the client-side validation functions.
+ * 
  * Transforms data to match Claim.MD's API specifications:
  * - Dates in yyyymmdd format (no hyphens)
  * - Proper relationship codes (18=self, 01=spouse, etc.)
@@ -65,6 +73,13 @@ export function formatEligibilityPayload(
   clientData: any, 
   practiceData: any
 ): Record<string, string> {
+  // Basic validation logging for edge function
+  console.log('🔄 [Edge Function] Formatting eligibility payload', {
+    clientHasPolicy: !!clientData.client_policy_number_primary,
+    clientHasInsurance: !!clientData.client_insurance_company_primary,
+    practiceHasNPI: !!practiceData.practice_npi,
+    timestamp: new Date().toISOString()
+  });
   // Determine if the client is the subscriber (self) or a dependent
   const isSelf = !clientData.client_subscriber_relationship_primary || 
                 clientData.client_subscriber_relationship_primary.toLowerCase().includes('self');

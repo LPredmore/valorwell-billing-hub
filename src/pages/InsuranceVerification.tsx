@@ -5,6 +5,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { ClaimMdApiService } from "@/services/claimdApiService";
+import { InsuranceLevel, type EligibilityStatus } from "@/types/claimmd";
 import { 
   Loader2, 
   AlertCircle, 
@@ -91,7 +93,7 @@ const InsuranceVerification = () => {
     }
   });
   
-  // Function to check eligibility for a client
+  // Enhanced function to check eligibility using the new validation service
   const checkEligibility = async (clientId: string) => {
     try {
       setIsChecking(true);
@@ -111,62 +113,85 @@ const InsuranceVerification = () => {
         return;
       }
       
-      // Call our edge function
-      const { data, error } = await supabase.functions.invoke('insurance-eligibility', {
-        body: { clientId },
-      });
+      // Use the new ClaimMD API service with comprehensive validation
+      console.log('🚀 Starting enhanced eligibility check with validation');
+      const result = await ClaimMdApiService.checkEligibility(clientId, InsuranceLevel.PRIMARY);
       
-      if (error) {
-        console.error('Eligibility check failed:', error);
-        setLastError(error.message);
+      if (result.success && result.data) {
+        const eligibilityData = result.data;
+        
+        toast({
+          title: 'Eligibility Check Complete',
+          description: `Status: ${eligibilityData.status}`,
+          variant: eligibilityData.status === 'Active' ? 'default' : 'destructive',
+        });
+        
+        // Also log the validation success
+        console.log('✅ Enhanced eligibility check completed with validation:', {
+          status: eligibilityData.status,
+          copay: eligibilityData.copay,
+          deductible: eligibilityData.deductible,
+          coinsurancePercent: eligibilityData.coinsurancePercent
+        });
+      } else {
+        console.error('❌ Enhanced eligibility check failed:', result.error);
+        setLastError(result.error || 'Unknown error occurred');
+        
         toast({
           title: 'Eligibility Check Failed',
-          description: error.message,
+          description: result.error || 'Unknown error occurred',
           variant: 'destructive',
         });
-        return;
       }
-      
-      if (data.error) {
-        console.error('Eligibility API error:', data.error);
-        
-        // Use the user-friendly message if available
-        const errorMessage = data.userMessage || data.details || data.error;
-        setLastError(errorMessage);
-        
-        // Show a more informative message based on the response type
-        const statusType = determineResponseType(data);
-        const toastVariant = getToastVariantByResponseType(statusType);
-        
-        toast({
-          title: 'Eligibility Information Received',
-          description: getResponseSummary(data),
-          variant: toastVariant,
-        });
-        return;
-      }
-      
-      const statusType = determineResponseType(data);
-      
-      toast({
-        title: 'Eligibility Check Complete',
-        description: `Status: ${data.eligibility.status}`,
-        variant: getToastVariantByResponseType(statusType),
-      });
       
       // Refresh the client data
       await refetch();
       
     } catch (err) {
-      console.error('Error checking eligibility:', err);
+      console.error('Error in enhanced eligibility check:', err);
       setLastError(err instanceof Error ? err.message : 'An unknown error occurred');
       toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'An unknown error occurred',
+        title: 'System Error',
+        description: 'Enhanced validation failed. Falling back to basic check.',
         variant: 'destructive',
       });
+      
+      // Fallback to original method if enhanced fails
+      await checkEligibilityFallback(clientId);
     } finally {
       setIsChecking(false);
+    }
+  };
+
+  // Fallback function for compatibility
+  const checkEligibilityFallback = async (clientId: string) => {
+    try {
+      console.log('🔄 Using fallback eligibility check method');
+      
+      // Call our edge function directly
+      const { data, error } = await supabase.functions.invoke('insurance-eligibility', {
+        body: { clientId },
+      });
+      
+      if (error) {
+        console.error('Fallback eligibility check failed:', error);
+        setLastError(error.message);
+        return;
+      }
+      
+      if (data.error) {
+        console.error('Fallback eligibility API error:', data.error);
+        const errorMessage = data.userMessage || data.details || data.error;
+        setLastError(errorMessage);
+        return;
+      }
+      
+      console.log('✅ Fallback eligibility check completed');
+      await refetch();
+      
+    } catch (err) {
+      console.error('Fallback eligibility check error:', err);
+      setLastError(err instanceof Error ? err.message : 'An unknown error occurred');
     }
   };
   
