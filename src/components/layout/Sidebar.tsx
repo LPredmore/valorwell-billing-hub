@@ -13,7 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  User
+  User,
+  AlertTriangle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -32,6 +33,7 @@ const items: SidebarItem[] = [
   { name: 'Claims', icon: ClipboardList, path: '/claims' },
   { name: 'Payments', icon: CreditCard, path: '/payments' },
   { name: 'Reports', icon: BarChart3, path: '/reports' },
+  { name: 'Error Monitoring', icon: AlertTriangle, path: '/error-monitoring' },
   { name: 'Settings', icon: Settings, path: '/settings' },
 ];
 

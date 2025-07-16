@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import Patients from "./pages/Patients";
 import InsuranceVerification from "./pages/InsuranceVerification";
 import Claims from "./pages/Claims";
+import ErrorMonitoring from "./pages/ErrorMonitoring";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -70,6 +71,13 @@ const App = () => (
                     <h1 className="text-2xl font-bold mb-4">Reports</h1>
                     <p>This page is under construction.</p>
                   </div>
+                </DashboardLayout>
+              </AuthGuard>
+            } />
+            <Route path="/error-monitoring" element={
+              <AuthGuard>
+                <DashboardLayout>
+                  <ErrorMonitoring />
                 </DashboardLayout>
               </AuthGuard>
             } />

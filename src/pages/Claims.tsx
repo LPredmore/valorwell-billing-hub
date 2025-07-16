@@ -13,6 +13,9 @@ import ClaimBatch from "@/components/claims/ClaimBatch";
 import EraManagement from "@/components/claims/EraManagement";
 import SubmittedClaimsTest from "@/components/claims/SubmittedClaimsTest";
 import EnhancedSubmittedClaimsQueue from "@/components/claims/enhanced/EnhancedSubmittedClaimsQueue";
+import BatchHistoryWidget from "@/components/claims/BatchHistoryWidget";
+import BatchPerformanceMetrics from "@/components/claims/BatchPerformanceMetrics";
+import BatchScheduleManager from "@/components/claims/BatchScheduleManager";
 
 export default function Claims() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -160,7 +163,7 @@ export default function Claims() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="billing" className="flex items-center gap-2">
             <ClipboardList className="h-4 w-4" />
             Ready for Submission
@@ -168,6 +171,10 @@ export default function Claims() {
           <TabsTrigger value="submitted" className="flex items-center gap-2">
             <CheckCircle className="h-4 w-4" />
             Submitted Claims
+          </TabsTrigger>
+          <TabsTrigger value="automation" className="flex items-center gap-2">
+            <RefreshCcw className="h-4 w-4" />
+            Batch Automation
           </TabsTrigger>
           <TabsTrigger value="payments" className="flex items-center gap-2">
             <DollarSign className="h-4 w-4" />
@@ -240,6 +247,12 @@ export default function Claims() {
 
         <TabsContent value="submitted" className="mt-4">
           <div className="space-y-6">
+            {/* Batch Performance Overview */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <BatchHistoryWidget />
+              <BatchPerformanceMetrics />
+            </div>
+            
             {/* Enhanced Claims Display */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Card className="lg:col-span-2">
@@ -273,6 +286,19 @@ export default function Claims() {
                   )}
                 </CardContent>
               </Card>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="automation" className="mt-4">
+          <div className="space-y-6">
+            {/* Batch Schedule Management */}
+            <BatchScheduleManager />
+            
+            {/* Performance Overview */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <BatchHistoryWidget />
+              <BatchPerformanceMetrics />
             </div>
           </div>
         </TabsContent>

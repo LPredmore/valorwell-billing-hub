@@ -335,6 +335,42 @@ export type Database = {
           },
         ]
       }
+      automated_batch_schedules: {
+        Row: {
+          created_at: string | null
+          cron_expression: string
+          id: string
+          is_active: boolean | null
+          last_run_at: string | null
+          next_run_at: string | null
+          run_count: number | null
+          schedule_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          cron_expression: string
+          id?: string
+          is_active?: boolean | null
+          last_run_at?: string | null
+          next_run_at?: string | null
+          run_count?: number | null
+          schedule_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          cron_expression?: string
+          id?: string
+          is_active?: boolean | null
+          last_run_at?: string | null
+          next_run_at?: string | null
+          run_count?: number | null
+          schedule_name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       availability_blocks: {
         Row: {
           clinician_id: string
@@ -555,6 +591,45 @@ export type Database = {
         }
         Relationships: []
       }
+      batch_performance_metrics: {
+        Row: {
+          average_response_time_ms: number | null
+          batch_date: string
+          created_at: string | null
+          error_rate_percent: number | null
+          failed_claims: number | null
+          id: string
+          processing_time_minutes: number | null
+          successful_claims: number | null
+          total_claims: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          average_response_time_ms?: number | null
+          batch_date: string
+          created_at?: string | null
+          error_rate_percent?: number | null
+          failed_claims?: number | null
+          id?: string
+          processing_time_minutes?: number | null
+          successful_claims?: number | null
+          total_claims?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          average_response_time_ms?: number | null
+          batch_date?: string
+          created_at?: string | null
+          error_rate_percent?: number | null
+          failed_claims?: number | null
+          id?: string
+          processing_time_minutes?: number | null
+          successful_claims?: number | null
+          total_claims?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       blocked_time: {
         Row: {
           clinician_id: string
@@ -646,6 +721,53 @@ export type Database = {
             columns: ["connection_id"]
             isOneToOne: false
             referencedRelation: "nylas_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      claim_status_audit_trail: {
+        Row: {
+          batch_id: string | null
+          changed_at: string | null
+          changed_by: string | null
+          claim_id: string
+          created_at: string | null
+          error_message: string | null
+          id: string
+          metadata: Json | null
+          status_from: string | null
+          status_to: string
+        }
+        Insert: {
+          batch_id?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          claim_id: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          status_from?: string | null
+          status_to: string
+        }
+        Update: {
+          batch_id?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          claim_id?: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          status_from?: string | null
+          status_to?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "claim_status_audit_trail_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "CMS1500_claims"
             referencedColumns: ["id"]
           },
         ]
@@ -1828,6 +1950,7 @@ export type Database = {
           ins_number: string
           ins_state: string
           ins_zip: string
+          last_batch_error: string | null
           last_status_check: string | null
           last_submission: string | null
           mod_1: string | null
@@ -1854,6 +1977,7 @@ export type Database = {
           remote_claimid: string
           response_json: Json | null
           status: string | null
+          submission_attempts: number | null
           submission_history: Json | null
           thru_date: string
           total_charge: number
@@ -1902,6 +2026,7 @@ export type Database = {
           ins_number: string
           ins_state: string
           ins_zip: string
+          last_batch_error?: string | null
           last_status_check?: string | null
           last_submission?: string | null
           mod_1?: string | null
@@ -1928,6 +2053,7 @@ export type Database = {
           remote_claimid: string
           response_json?: Json | null
           status?: string | null
+          submission_attempts?: number | null
           submission_history?: Json | null
           thru_date: string
           total_charge: number
@@ -1976,6 +2102,7 @@ export type Database = {
           ins_number?: string
           ins_state?: string
           ins_zip?: string
+          last_batch_error?: string | null
           last_status_check?: string | null
           last_submission?: string | null
           mod_1?: string | null
@@ -2002,6 +2129,7 @@ export type Database = {
           remote_claimid?: string
           response_json?: Json | null
           status?: string | null
+          submission_attempts?: number | null
           submission_history?: Json | null
           thru_date?: string
           total_charge?: number
@@ -3640,6 +3768,17 @@ export type Database = {
           p_notes: string
           p_mapping_id: string
           p_last_sync_hash: string
+        }
+        Returns: undefined
+      }
+      update_batch_performance_metrics: {
+        Args: {
+          p_batch_date: string
+          p_total_claims: number
+          p_successful_claims: number
+          p_failed_claims: number
+          p_processing_time_minutes: number
+          p_average_response_time_ms: number
         }
         Returns: undefined
       }
