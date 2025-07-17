@@ -14,9 +14,9 @@ interface AlertRule {
   threshold_count: number;
   time_window_minutes: number;
   alert_enabled: boolean;
-  severity_level: 'low' | 'medium' | 'high' | 'critical';
   last_triggered_at?: string;
   created_at: string;
+  updated_at: string;
 }
 
 interface ErrorSummary {
@@ -32,8 +32,7 @@ export default function AlertSystem() {
   const [newRule, setNewRule] = useState({
     error_pattern: '',
     threshold_count: 5,
-    time_window_minutes: 60,
-    severity_level: 'medium' as const
+    time_window_minutes: 60
   });
 
   // Fetch alert rules
@@ -96,7 +95,6 @@ export default function AlertSystem() {
           error_pattern: rule.error_pattern,
           threshold_count: rule.threshold_count,
           time_window_minutes: rule.time_window_minutes,
-          severity_level: rule.severity_level,
           alert_enabled: true
         }])
         .select()
@@ -110,8 +108,7 @@ export default function AlertSystem() {
       setNewRule({
         error_pattern: '',
         threshold_count: 5,
-        time_window_minutes: 60,
-        severity_level: 'medium'
+        time_window_minutes: 60
       });
       toast({
         title: 'Alert Rule Created',
@@ -305,7 +302,7 @@ export default function AlertSystem() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleCreateRule} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="text-sm font-medium">Error Pattern</label>
                 <input
@@ -339,19 +336,6 @@ export default function AlertSystem() {
                   required
                 />
               </div>
-              <div>
-                <label className="text-sm font-medium">Severity Level</label>
-                <select
-                  className="w-full mt-1 px-3 py-2 border rounded-md"
-                  value={newRule.severity_level}
-                  onChange={(e) => setNewRule(prev => ({ ...prev, severity_level: e.target.value as any }))}
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                </select>
-              </div>
             </div>
             <Button type="submit" disabled={createRuleMutation.isPending}>
               {createRuleMutation.isPending ? 'Creating...' : 'Create Alert Rule'}
@@ -383,7 +367,7 @@ export default function AlertSystem() {
               {alertRules.map((rule) => (
                 <div key={rule.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center space-x-3">
-                    {getSeverityIcon(rule.severity_level)}
+                    <Clock className="h-4 w-4 text-blue-500" />
                     <div>
                       <p className="font-medium">Pattern: "{rule.error_pattern}"</p>
                       <p className="text-sm text-muted-foreground">
@@ -395,9 +379,6 @@ export default function AlertSystem() {
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Badge variant={getSeverityColor(rule.severity_level) as any}>
-                      {rule.severity_level}
-                    </Badge>
                     <Badge variant={rule.alert_enabled ? 'default' : 'secondary'}>
                       {rule.alert_enabled ? 'Active' : 'Inactive'}
                     </Badge>
