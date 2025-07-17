@@ -1,358 +1,432 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertTriangle, CheckCircle, XCircle, Clock, RefreshCw } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, CheckCircle, Info, XCircle, Bell, BellOff } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
-interface AlertItem {
+interface AlertRule {
   id: string;
-  type: 'error' | 'warning' | 'info' | 'success';
-  title: string;
-  message: string;
-  timestamp: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  source: string;
-  resolved: boolean;
+  error_pattern: string;
+  threshold_count: number;
+  time_window_minutes: number;
+  alert_enabled: boolean;
+  severity_level: 'low' | 'medium' | 'high' | 'critical';
+  last_triggered_at?: string;
+  created_at: string;
+}
+
+interface ErrorSummary {
+  pattern: string;
+  count: number;
+  severity: string;
+  last_occurrence: string;
 }
 
 export default function AlertSystem() {
-  const [alerts, setAlerts] = useState<AlertItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [newRule, setNewRule] = useState({
+    error_pattern: '',
+    threshold_count: 5,
+    time_window_minutes: 60,
+    severity_level: 'medium' as const
+  });
 
-  useEffect(() => {
-    fetchAlerts();
-    checkNotificationPermission();
-  }, []);
-
-  const fetchAlerts = async () => {
-    try {
-      // Fetch from API logs for error-related alerts
-      const { data: apiLogs, error } = await supabase
-        .from('api_logs')
+  // Fetch alert rules
+  const { data: alertRules, isLoading: rulesLoading } = useQuery({
+    queryKey: ['alert-rules'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('error_monitoring')
         .select('*')
-        .in('status', ['error', 'alert'])
-        .eq('resolution_status', 'new')
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-
-      const formattedAlerts: AlertItem[] = (apiLogs || []).map(log => ({
-        id: log.id,
-        type: log.status === 'error' ? 'error' : 'warning',
-        title: getAlertTitle(log.endpoint, log.error_category),
-        message: log.error_message || 'Unknown error occurred',
-        timestamp: log.created_at,
-        severity: mapSeverity(log.error_severity),
-        source: log.endpoint,
-        resolved: log.resolution_status === 'resolved'
-      }));
-
-      setAlerts(formattedAlerts);
-    } catch (error) {
-      console.error('Error fetching alerts:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch alerts",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const checkNotificationPermission = () => {
-    if ('Notification' in window) {
-      setNotificationsEnabled(Notification.permission === 'granted');
-    }
-  };
-
-  const requestNotificationPermission = async () => {
-    if ('Notification' in window) {
-      const permission = await Notification.requestPermission();
-      setNotificationsEnabled(permission === 'granted');
+        .order('created_at', { ascending: false });
       
-      if (permission === 'granted') {
-        toast({
-          title: "Notifications Enabled",
-          description: "You will now receive alerts for critical issues",
-        });
-      }
+      if (error) throw error;
+      return data as AlertRule[];
     }
+  });
+
+  // Fetch error summary for the last 24 hours
+  const { data: errorSummary, isLoading: summaryLoading } = useQuery({
+    queryKey: ['error-summary'],
+    queryFn: async () => {
+      const twentyFourHoursAgo = new Date();
+      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+      
+      const { data, error } = await supabase
+        .from('api_logs')
+        .select('error_message, error_severity, created_at')
+        .eq('status', 'error')
+        .gte('created_at', twentyFourHoursAgo.toISOString());
+      
+      if (error) throw error;
+      
+      // Group errors by pattern
+      const grouped = data.reduce((acc: Record<string, ErrorSummary>, log) => {
+        const pattern = log.error_message?.substring(0, 50) || 'Unknown';
+        if (!acc[pattern]) {
+          acc[pattern] = {
+            pattern,
+            count: 0,
+            severity: log.error_severity || 'medium',
+            last_occurrence: log.created_at
+          };
+        }
+        acc[pattern].count++;
+        if (new Date(log.created_at) > new Date(acc[pattern].last_occurrence)) {
+          acc[pattern].last_occurrence = log.created_at;
+        }
+        return acc;
+      }, {});
+      
+      return Object.values(grouped).sort((a, b) => b.count - a.count);
+    }
+  });
+
+  // Create alert rule mutation
+  const createRuleMutation = useMutation({
+    mutationFn: async (rule: typeof newRule) => {
+      const { data, error } = await supabase
+        .from('error_monitoring')
+        .insert([{
+          error_pattern: rule.error_pattern,
+          threshold_count: rule.threshold_count,
+          time_window_minutes: rule.time_window_minutes,
+          severity_level: rule.severity_level,
+          alert_enabled: true
+        }])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
+      setNewRule({
+        error_pattern: '',
+        threshold_count: 5,
+        time_window_minutes: 60,
+        severity_level: 'medium'
+      });
+      toast({
+        title: 'Alert Rule Created',
+        description: 'New monitoring rule has been added successfully.',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: `Failed to create alert rule: ${error.message}`,
+        variant: 'destructive',
+      });
+    }
+  });
+
+  // Toggle alert rule mutation
+  const toggleRuleMutation = useMutation({
+    mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
+      const { error } = await supabase
+        .from('error_monitoring')
+        .update({ alert_enabled: enabled })
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
+      toast({
+        title: 'Alert Rule Updated',
+        description: 'Rule status has been updated successfully.',
+      });
+    }
+  });
+
+  // Delete alert rule mutation
+  const deleteRuleMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('error_monitoring')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
+      toast({
+        title: 'Alert Rule Deleted',
+        description: 'Rule has been removed successfully.',
+      });
+    }
+  });
+
+  // Check thresholds mutation
+  const checkThresholdsMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('check_error_thresholds');
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['error-summary'] });
+      toast({
+        title: 'Threshold Check Complete',
+        description: 'Alert thresholds have been evaluated.',
+      });
+    }
+  });
+
+  const handleCreateRule = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRule.error_pattern.trim()) {
+      toast({
+        title: 'Validation Error',
+        description: 'Error pattern is required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    createRuleMutation.mutate(newRule);
   };
 
-  const getAlertTitle = (endpoint: string, category: string) => {
-    const titles: { [key: string]: string } = {
-      'batch-automation': 'Batch Processing Alert',
-      'claim-batch-submission': 'Batch Submission Alert',
-      'insurance-eligibility': 'Insurance Verification Alert',
-      'era-retrieval': 'ERA Processing Alert',
-    };
-    
-    return titles[endpoint] || `${category} Alert`;
-  };
-
-  const mapSeverity = (severity: string): 'low' | 'medium' | 'high' | 'critical' => {
-    const mapping: { [key: string]: 'low' | 'medium' | 'high' | 'critical' } = {
-      'low': 'low',
-      'medium': 'medium',
-      'high': 'high',
-      'critical': 'critical'
-    };
-    return mapping[severity] || 'medium';
-  };
-
-  const getAlertIcon = (type: string, severity: string) => {
-    if (severity === 'critical') return <XCircle className="h-4 w-4 text-red-500" />;
-    
-    switch (type) {
-      case 'error':
-        return <AlertTriangle className="h-4 w-4 text-red-500" />;
-      case 'warning':
-        return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-      case 'success':
+  const getSeverityIcon = (severity: string) => {
+    switch (severity) {
+      case 'critical':
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      case 'high':
+        return <AlertTriangle className="h-4 w-4 text-orange-500" />;
+      case 'medium':
+        return <Clock className="h-4 w-4 text-yellow-500" />;
+      case 'low':
         return <CheckCircle className="h-4 w-4 text-green-500" />;
       default:
-        return <Info className="h-4 w-4 text-blue-500" />;
+        return <Clock className="h-4 w-4 text-gray-500" />;
     }
   };
 
-  const getSeverityBadge = (severity: string) => {
-    const variants = {
-      low: 'secondary',
-      medium: 'outline', 
-      high: 'destructive',
-      critical: 'destructive'
-    } as const;
-
-    return (
-      <Badge 
-        variant={variants[severity as keyof typeof variants] || 'secondary'}
-        className={severity === 'critical' ? 'animate-pulse' : ''}
-      >
-        {severity.toUpperCase()}
-      </Badge>
-    );
-  };
-
-  const resolveAlert = async (alertId: string) => {
-    try {
-      const { error } = await supabase
-        .from('api_logs')
-        .update({ 
-          resolution_status: 'resolved',
-          resolved_at: new Date().toISOString(),
-          resolved_by: (await supabase.auth.getUser()).data.user?.id
-        })
-        .eq('id', alertId);
-
-      if (error) throw error;
-
-      setAlerts(alerts.filter(alert => alert.id !== alertId));
-      
-      toast({
-        title: "Alert Resolved",
-        description: "Alert has been marked as resolved",
-      });
-    } catch (error) {
-      console.error('Error resolving alert:', error);
-      toast({
-        title: "Error",
-        description: "Failed to resolve alert",
-        variant: "destructive",
-      });
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case 'critical':
+        return 'destructive';
+      case 'high':
+        return 'destructive';
+      case 'medium':
+        return 'default';
+      case 'low':
+        return 'secondary';
+      default:
+        return 'outline';
     }
   };
 
-  const criticalAlerts = alerts.filter(alert => alert.severity === 'critical');
-  const highAlerts = alerts.filter(alert => alert.severity === 'high');
-  const otherAlerts = alerts.filter(alert => !['critical', 'high'].includes(alert.severity));
-
-  if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>System Alerts</CardTitle>
-          <CardDescription>Monitor system health and issues</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-16 bg-muted animate-pulse rounded" />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const formatTimeAgo = (dateString: string) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 60) {
+      return `${diffInMinutes}m ago`;
+    } else if (diffInMinutes < 1440) {
+      return `${Math.floor(diffInMinutes / 60)}h ago`;
+    } else {
+      return `${Math.floor(diffInMinutes / 1440)}d ago`;
+    }
+  };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      {/* Error Summary */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <div>
-            <CardTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5" />
-              System Alerts
-              {alerts.length > 0 && (
-                <Badge variant="destructive" className="ml-2">
-                  {alerts.length}
-                </Badge>
-              )}
-            </CardTitle>
-            <CardDescription>Monitor system health and critical issues</CardDescription>
+            <CardTitle>Error Summary (Last 24h)</CardTitle>
+            <CardDescription>
+              Most frequent errors and their patterns
+            </CardDescription>
           </div>
           <Button
             variant="outline"
             size="sm"
-            onClick={notificationsEnabled ? undefined : requestNotificationPermission}
-            className="flex items-center gap-2"
+            onClick={() => checkThresholdsMutation.mutate()}
+            disabled={checkThresholdsMutation.isPending}
           >
-            {notificationsEnabled ? (
-              <>
-                <Bell className="h-4 w-4" />
-                Notifications On
-              </>
-            ) : (
-              <>
-                <BellOff className="h-4 w-4" />
-                Enable Notifications
-              </>
-            )}
+            <RefreshCw className={`h-4 w-4 mr-2 ${checkThresholdsMutation.isPending ? 'animate-spin' : ''}`} />
+            Check Thresholds
           </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {alerts.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
-            <p className="text-lg font-medium">All systems operational</p>
-            <p className="text-sm">No active alerts or issues detected</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Critical Alerts */}
-            {criticalAlerts.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium text-red-600">Critical Alerts</h4>
-                {criticalAlerts.map((alert) => (
-                  <Alert key={alert.id} variant="destructive" className="animate-pulse">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-2">
-                        {getAlertIcon(alert.type, alert.severity)}
-                        <div className="flex-1">
-                          <AlertTitle className="flex items-center gap-2">
-                            {alert.title}
-                            {getSeverityBadge(alert.severity)}
-                          </AlertTitle>
-                          <AlertDescription className="mt-1">
-                            {alert.message}
-                          </AlertDescription>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            {new Date(alert.timestamp).toLocaleString()} | {alert.source}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => resolveAlert(alert.id)}
-                      >
-                        Resolve
-                      </Button>
+        </CardHeader>
+        <CardContent>
+          {summaryLoading ? (
+            <div className="text-center py-4">Loading error summary...</div>
+          ) : !errorSummary?.length ? (
+            <Alert>
+              <CheckCircle className="h-4 w-4" />
+              <AlertDescription>
+                No errors detected in the last 24 hours. System is running smoothly!
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <div className="space-y-3">
+              {errorSummary.slice(0, 10).map((error, index) => (
+                <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    {getSeverityIcon(error.severity)}
+                    <div>
+                      <p className="font-medium text-sm">{error.pattern}...</p>
+                      <p className="text-xs text-muted-foreground">
+                        Last seen: {formatTimeAgo(error.last_occurrence)}
+                      </p>
                     </div>
-                  </Alert>
-                ))}
-              </div>
-            ))}
-
-            {/* High Priority Alerts */}
-            {highAlerts.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium text-orange-600">High Priority</h4>
-                {highAlerts.map((alert) => (
-                  <Alert key={alert.id} className="border-orange-200">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-2">
-                        {getAlertIcon(alert.type, alert.severity)}
-                        <div className="flex-1">
-                          <AlertTitle className="flex items-center gap-2">
-                            {alert.title}
-                            {getSeverityBadge(alert.severity)}
-                          </AlertTitle>
-                          <AlertDescription className="mt-1">
-                            {alert.message}
-                          </AlertDescription>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            {new Date(alert.timestamp).toLocaleString()} | {alert.source}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => resolveAlert(alert.id)}
-                      >
-                        Resolve
-                      </Button>
-                    </div>
-                  </Alert>
-                ))}
-              </div>
-            ))}
-
-            {/* Other Alerts */}
-            {otherAlerts.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium">Other Alerts</h4>
-                {otherAlerts.map((alert) => (
-                  <Alert key={alert.id}>
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-2">
-                        {getAlertIcon(alert.type, alert.severity)}
-                        <div className="flex-1">
-                          <AlertTitle className="flex items-center gap-2">
-                            {alert.title}
-                            {getSeverityBadge(alert.severity)}
-                          </AlertTitle>
-                          <AlertDescription className="mt-1">
-                            {alert.message}
-                          </AlertDescription>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            {new Date(alert.timestamp).toLocaleString()} | {alert.source}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => resolveAlert(alert.id)}
-                      >
-                        Resolve
-                      </Button>
-                    </div>
-                  </Alert>
-                ))}
-              </div>
-            ))}
-
-            <div className="pt-4 border-t">
-              <Button 
-                variant="outline" 
-                onClick={fetchAlerts}
-                className="w-full"
-              >
-                Refresh Alerts
-              </Button>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant={getSeverityColor(error.severity) as any}>
+                      {error.count} occurrences
+                    </Badge>
+                    <Badge variant="outline">{error.severity}</Badge>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Create New Alert Rule */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Create Alert Rule</CardTitle>
+          <CardDescription>
+            Set up monitoring rules to get notified when error thresholds are exceeded
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleCreateRule} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Error Pattern</label>
+                <input
+                  type="text"
+                  className="w-full mt-1 px-3 py-2 border rounded-md"
+                  placeholder="e.g., 'timeout', 'authentication', etc."
+                  value={newRule.error_pattern}
+                  onChange={(e) => setNewRule(prev => ({ ...prev, error_pattern: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Threshold Count</label>
+                <input
+                  type="number"
+                  min="1"
+                  className="w-full mt-1 px-3 py-2 border rounded-md"
+                  value={newRule.threshold_count}
+                  onChange={(e) => setNewRule(prev => ({ ...prev, threshold_count: parseInt(e.target.value) }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Time Window (minutes)</label>
+                <input
+                  type="number"
+                  min="1"
+                  className="w-full mt-1 px-3 py-2 border rounded-md"
+                  value={newRule.time_window_minutes}
+                  onChange={(e) => setNewRule(prev => ({ ...prev, time_window_minutes: parseInt(e.target.value) }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Severity Level</label>
+                <select
+                  className="w-full mt-1 px-3 py-2 border rounded-md"
+                  value={newRule.severity_level}
+                  onChange={(e) => setNewRule(prev => ({ ...prev, severity_level: e.target.value as any }))}
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
+            </div>
+            <Button type="submit" disabled={createRuleMutation.isPending}>
+              {createRuleMutation.isPending ? 'Creating...' : 'Create Alert Rule'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Existing Alert Rules */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Alert Rules</CardTitle>
+          <CardDescription>
+            Manage your existing monitoring rules
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {rulesLoading ? (
+            <div className="text-center py-4">Loading alert rules...</div>
+          ) : !alertRules?.length ? (
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                No alert rules configured. Create your first rule above to start monitoring.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <div className="space-y-3">
+              {alertRules.map((rule) => (
+                <div key={rule.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    {getSeverityIcon(rule.severity_level)}
+                    <div>
+                      <p className="font-medium">Pattern: "{rule.error_pattern}"</p>
+                      <p className="text-sm text-muted-foreground">
+                        {rule.threshold_count} errors in {rule.time_window_minutes} minutes
+                        {rule.last_triggered_at && (
+                          <span> • Last triggered: {formatTimeAgo(rule.last_triggered_at)}</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant={getSeverityColor(rule.severity_level) as any}>
+                      {rule.severity_level}
+                    </Badge>
+                    <Badge variant={rule.alert_enabled ? 'default' : 'secondary'}>
+                      {rule.alert_enabled ? 'Active' : 'Inactive'}
+                    </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleRuleMutation.mutate({
+                        id: rule.id,
+                        enabled: !rule.alert_enabled
+                      })}
+                      disabled={toggleRuleMutation.isPending}
+                    >
+                      {rule.alert_enabled ? 'Disable' : 'Enable'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => deleteRuleMutation.mutate(rule.id)}
+                      disabled={deleteRuleMutation.isPending}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

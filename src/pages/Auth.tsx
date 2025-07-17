@@ -1,5 +1,4 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -24,7 +23,7 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, user, adminProfile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
@@ -34,20 +33,43 @@ export default function Auth() {
   const [debugInfo, setDebugInfo] = useState<string>("");
   const { toast } = useToast();
 
+  // Redirect authenticated users automatically
+  useEffect(() => {
+    console.log('🔍 Auth page useEffect - checking auth state:', {
+      user: !!user,
+      adminProfile: !!adminProfile,
+      authLoading
+    });
+
+    if (!authLoading && user && adminProfile) {
+      console.log('✅ User fully authenticated, redirecting to dashboard');
+      navigate('/', { replace: true });
+    }
+  }, [user, adminProfile, authLoading, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
+    console.log('🔑 Starting sign in process');
+
     try {
       const { error } = await signIn(email, password);
       
       if (error) {
+        console.error('❌ Sign in failed:', error.message);
         setError(error.message);
       } else {
-        navigate('/');
+        console.log('✅ Sign in successful, waiting for profile load...');
+        // Don't navigate here - let the useEffect handle it after admin profile loads
+        toast({
+          title: 'Success',
+          description: 'Successfully signed in. Loading your profile...',
+        });
       }
     } catch (err) {
+      console.error('💥 Unexpected error during sign in:', err);
       setError('An unexpected error occurred');
     } finally {
       setLoading(false);
@@ -176,6 +198,22 @@ export default function Auth() {
       setResetLoading(false);
     }
   };
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-valorwell-purple mx-auto mb-4"></div>
+              <p>Checking authentication...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">

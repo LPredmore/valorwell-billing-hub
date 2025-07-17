@@ -31,6 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchAdminProfile = async (userEmail: string) => {
     try {
+      console.log('🔍 Fetching admin profile for email:', userEmail);
       const { data, error } = await supabase
         .from('admins')
         .select('*')
@@ -38,41 +39,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error) {
-        console.error('Error fetching admin profile:', error);
+        console.error('❌ Error fetching admin profile:', error);
         return null;
       }
 
+      console.log('✅ Admin profile found:', data);
       return data;
     } catch (error) {
-      console.error('Error in fetchAdminProfile:', error);
+      console.error('💥 Exception in fetchAdminProfile:', error);
       return null;
     }
   };
 
   useEffect(() => {
+    console.log('🚀 Setting up auth state listener');
+    
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session);
+        console.log('🔄 Auth state changed:', event, session?.user?.email);
+        
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user?.email) {
-          // Defer admin profile fetch to avoid potential callback issues
-          setTimeout(async () => {
-            const profile = await fetchAdminProfile(session.user.email);
-            setAdminProfile(profile);
-            setLoading(false);
-          }, 0);
+          console.log('👤 User authenticated, fetching admin profile...');
+          // Fetch admin profile for authenticated user
+          const profile = await fetchAdminProfile(session.user.email);
+          setAdminProfile(profile);
+          
+          if (profile) {
+            console.log('✅ Admin profile loaded, authentication complete');
+          } else {
+            console.log('⚠️ No admin profile found for this email');
+          }
         } else {
+          console.log('🚪 No authenticated user, clearing admin profile');
           setAdminProfile(null);
-          setLoading(false);
         }
+        
+        setLoading(false);
       }
     );
 
     // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('🔍 Checking for existing session:', session?.user?.email);
+      
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -90,14 +103,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
+    console.log('🔑 Attempting sign in for:', email);
+    
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+    
+    if (error) {
+      console.error('❌ Sign in error:', error);
+    } else {
+      console.log('✅ Sign in successful');
+    }
+    
     return { error };
   };
 
   const signOut = async () => {
+    console.log('🚪 Signing out user');
     await supabase.auth.signOut();
     setAdminProfile(null);
   };

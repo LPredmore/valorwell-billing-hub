@@ -3608,6 +3608,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      audit_email_sync_status: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          clinician_id: string
+          auth_email: string
+          clinician_email: string
+          sync_status: string
+          last_auth_update: string
+          last_clinician_update: string
+          mismatch_duration: unknown
+        }[]
+      }
       cancel_appointment_and_delete_mapping: {
         Args: {
           p_appointment_id: string
@@ -3748,6 +3760,18 @@ export type Database = {
         Args: { user_id: string }
         Returns: boolean
       }
+      log_email_update_operation: {
+        Args: {
+          operation_type: string
+          clinician_id: string
+          old_email: string
+          new_email: string
+          source_component: string
+          correlation_id?: string
+          additional_data?: Json
+        }
+        Returns: undefined
+      }
       mark_notifications_as_read: {
         Args: { p_user_id: string; p_notification_ids?: string[] }
         Returns: number
@@ -3789,6 +3813,15 @@ export type Database = {
       user_has_admin_role: {
         Args: { user_id: string }
         Returns: boolean
+      }
+      validate_clinician_email_consistency: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          clinician_id: string
+          auth_email: string
+          clinician_email: string
+          status: string
+        }[]
       }
       validate_timezone_integrity: {
         Args: Record<PropertyKey, never>
