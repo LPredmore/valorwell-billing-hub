@@ -36,17 +36,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchAdminProfile = async (userEmail: string) => {
+  const fetchAdminProfile = async (userEmail: string): Promise<AdminProfile | null> => {
     try {
-      console.log('🔍 Fetching admin profile for email:', userEmail);
+      console.log('🔍 Starting admin profile fetch for email:', userEmail);
       
-      // First, try to find in admins table
+      // First, try to find in admins table using maybeSingle() to avoid 406 errors
+      console.log('🔍 Checking admins table...');
       const { data: adminData, error: adminError } = await supabase
         .from('admins')
         .select('*')
         .eq('admin_email', userEmail)
         .maybeSingle();
 
+      console.log('📋 Admin table query result:', { adminData, adminError });
+
+      // If we found an admin record and no error, return it
       if (!adminError && adminData) {
         console.log('✅ Admin profile found in admins table:', adminData);
         return {
@@ -55,15 +59,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
+      // If there was an error other than "no rows", log it but continue
+      if (adminError && adminError.code !== 'PGRST116') {
+        console.log('⚠️ Admin table query error (continuing to clinicians):', adminError);
+      }
+
       console.log('🔍 No admin found in admins table, checking clinicians...');
       
-      // If not found in admins, check clinicians table for admin clinicians
+      // Check clinicians table for admin clinicians using maybeSingle()
       const { data: clinicianData, error: clinicianError } = await supabase
         .from('clinicians')
         .select('*')
         .eq('clinician_email', userEmail)
         .eq('is_admin', true)
         .maybeSingle();
+
+      console.log('📋 Clinician table query result:', { clinicianData, clinicianError });
 
       if (!clinicianError && clinicianData) {
         console.log('✅ Clinician admin profile found:', clinicianData);
@@ -76,6 +87,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           is_admin: clinicianData.is_admin,
           profile_type: 'clinician_admin' as const
         };
+      }
+
+      // If there was a clinician error, log it
+      if (clinicianError) {
+        console.log('⚠️ Clinician table query error:', clinicianError);
       }
 
       console.log('❌ No admin or clinician admin profile found for this email');
@@ -104,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAdminProfile(profile);
           
           if (profile) {
-            console.log('✅ Admin profile loaded, authentication complete');
+            console.log('✅ Admin profile loaded successfully:', profile.profile_type);
           } else {
             console.log('⚠️ No admin profile found for this email');
           }

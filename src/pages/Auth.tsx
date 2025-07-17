@@ -37,8 +37,10 @@ export default function Auth() {
   useEffect(() => {
     console.log('🔍 Auth page useEffect - checking auth state:', {
       user: !!user,
+      userEmail: user?.email,
       adminProfile: !!adminProfile,
       profileType: adminProfile?.profile_type,
+      profileEmail: adminProfile?.admin_email || adminProfile?.clinician_email,
       authLoading
     });
 
@@ -53,7 +55,7 @@ export default function Auth() {
     setLoading(true);
     setError(null);
 
-    console.log('🔑 Starting sign in process');
+    console.log('🔑 Starting sign in process for:', email);
 
     try {
       const { error } = await signIn(email, password);
@@ -62,6 +64,8 @@ export default function Auth() {
         console.error('❌ Sign in failed:', error.message);
         if (error.message.includes('Invalid login credentials')) {
           setError('Invalid email or password. Please check your credentials and try again.');
+        } else if (error.message.includes('Email not confirmed')) {
+          setError('Please check your email and click the confirmation link before signing in.');
         } else {
           setError(error.message);
         }
