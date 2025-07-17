@@ -17,6 +17,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       loading,
       hasUser: !!user,
       hasAdminProfile: !!adminProfile,
+      profileType: adminProfile?.profile_type,
       userEmail: user?.email
     });
 
@@ -37,6 +38,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         return () => clearTimeout(timeout);
       } else {
         console.log('✅ User and admin profile both present, access granted');
+        console.log('📋 Admin profile type:', adminProfile.profile_type);
       }
     }
   }, [user, adminProfile, loading, navigate]);

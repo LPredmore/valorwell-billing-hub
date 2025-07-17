@@ -38,11 +38,12 @@ export default function Auth() {
     console.log('🔍 Auth page useEffect - checking auth state:', {
       user: !!user,
       adminProfile: !!adminProfile,
+      profileType: adminProfile?.profile_type,
       authLoading
     });
 
     if (!authLoading && user && adminProfile) {
-      console.log('✅ User fully authenticated, redirecting to dashboard');
+      console.log('✅ User fully authenticated with admin profile, redirecting to dashboard');
       navigate('/', { replace: true });
     }
   }, [user, adminProfile, authLoading, navigate]);
@@ -59,10 +60,13 @@ export default function Auth() {
       
       if (error) {
         console.error('❌ Sign in failed:', error.message);
-        setError(error.message);
+        if (error.message.includes('Invalid login credentials')) {
+          setError('Invalid email or password. Please check your credentials and try again.');
+        } else {
+          setError(error.message);
+        }
       } else {
         console.log('✅ Sign in successful, waiting for profile load...');
-        // Don't navigate here - let the useEffect handle it after admin profile loads
         toast({
           title: 'Success',
           description: 'Successfully signed in. Loading your profile...',
@@ -92,7 +96,6 @@ export default function Auth() {
       console.log('- Browser User Agent:', navigator.userAgent);
       console.log('- Timestamp:', new Date().toISOString());
 
-      // Check if the email is valid format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(resetEmail)) {
         console.log('❌ Invalid email format');
@@ -103,7 +106,6 @@ export default function Auth() {
 
       console.log('📧 Attempting to send password reset email...');
       
-      // First, let's check if the user exists by trying to sign in with an invalid password
       console.log('🔍 Checking if user exists in auth system...');
       const userCheckResponse = await supabase.auth.signInWithPassword({
         email: resetEmail,
@@ -114,7 +116,6 @@ export default function Auth() {
       const userExists = userCheckResponse.error?.message !== "Invalid login credentials";
       console.log('👤 User exists in system:', userExists);
 
-      // Now attempt the actual password reset
       console.log('🚀 Making resetPasswordForEmail request...');
       const startTime = performance.now();
       
@@ -132,11 +133,9 @@ export default function Auth() {
       console.log('- Error type:', typeof resetResponse.error);
       console.log('- Error details:', resetResponse.error);
       
-      // Check the current session state
       const sessionCheck = await supabase.auth.getSession();
       console.log('🔐 Current session state:', sessionCheck);
 
-      // Check Supabase connection
       console.log('🌐 Testing basic Supabase connectivity...');
       try {
         const healthCheck = await supabase.from('admins').select('count', { count: 'exact', head: true });
@@ -145,7 +144,6 @@ export default function Auth() {
         console.log('❌ Supabase connectivity test failed:', healthError);
       }
       
-      // Create enhanced debug info for display
       const debugDetails = [
         `Email: ${resetEmail}`,
         `User exists: ${userExists}`,

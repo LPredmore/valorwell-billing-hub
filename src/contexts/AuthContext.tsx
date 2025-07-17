@@ -5,11 +5,18 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface AdminProfile {
   id: string;
-  admin_email: string;
+  admin_email?: string;
   admin_first_name?: string;
   admin_last_name?: string;
   admin_status?: string;
   admin_phone?: string;
+  // Clinician admin fields
+  clinician_email?: string;
+  clinician_first_name?: string;
+  clinician_last_name?: string;
+  clinician_phone?: string;
+  is_admin?: boolean;
+  profile_type: 'admin' | 'clinician_admin';
 }
 
 interface AuthContextType {
@@ -32,19 +39,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchAdminProfile = async (userEmail: string) => {
     try {
       console.log('🔍 Fetching admin profile for email:', userEmail);
-      const { data, error } = await supabase
+      
+      // First, try to find in admins table
+      const { data: adminData, error: adminError } = await supabase
         .from('admins')
         .select('*')
         .eq('admin_email', userEmail)
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        console.error('❌ Error fetching admin profile:', error);
-        return null;
+      if (!adminError && adminData) {
+        console.log('✅ Admin profile found in admins table:', adminData);
+        return {
+          ...adminData,
+          profile_type: 'admin' as const
+        };
       }
 
-      console.log('✅ Admin profile found:', data);
-      return data;
+      console.log('🔍 No admin found in admins table, checking clinicians...');
+      
+      // If not found in admins, check clinicians table for admin clinicians
+      const { data: clinicianData, error: clinicianError } = await supabase
+        .from('clinicians')
+        .select('*')
+        .eq('clinician_email', userEmail)
+        .eq('is_admin', true)
+        .maybeSingle();
+
+      if (!clinicianError && clinicianData) {
+        console.log('✅ Clinician admin profile found:', clinicianData);
+        return {
+          id: clinicianData.id,
+          clinician_email: clinicianData.clinician_email,
+          clinician_first_name: clinicianData.clinician_first_name,
+          clinician_last_name: clinicianData.clinician_last_name,
+          clinician_phone: clinicianData.clinician_phone,
+          is_admin: clinicianData.is_admin,
+          profile_type: 'clinician_admin' as const
+        };
+      }
+
+      console.log('❌ No admin or clinician admin profile found for this email');
+      return null;
     } catch (error) {
       console.error('💥 Exception in fetchAdminProfile:', error);
       return null;
