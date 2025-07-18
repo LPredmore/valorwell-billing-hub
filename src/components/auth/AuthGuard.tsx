@@ -28,13 +28,13 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         navigate('/auth');
       } else if (!adminProfile) {
         console.log('⚠️ User found but no admin profile, waiting a bit more...');
-        // Give it a moment for the admin profile to load
+        // Give it a moment for the admin profile to load with new RLS policies
         const timeout = setTimeout(() => {
           if (!adminProfile) {
             console.log('❌ Still no admin profile after timeout, redirecting to auth');
             navigate('/auth');
           }
-        }, 3000); // Wait 3 seconds for admin profile to load
+        }, 2000); // Reduced timeout since new policies should be faster
 
         return () => clearTimeout(timeout);
       } else {
@@ -53,9 +53,9 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     console.log('⏳ AuthGuard showing loading state');
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-32" />
+        <div className="space-y-4 text-center">
+          <Skeleton className="h-8 w-48 mx-auto" />
+          <Skeleton className="h-4 w-32 mx-auto" />
           <div className="text-sm text-muted-foreground mt-2">
             Loading your profile...
           </div>
@@ -74,13 +74,13 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="space-y-4 text-center">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-8 w-48 mx-auto" />
+          <Skeleton className="h-4 w-32 mx-auto" />
           <div className="text-sm text-muted-foreground mt-2">
             Verifying admin access for {user.email}...
           </div>
           <div className="text-xs text-muted-foreground">
-            Checking both admin and clinician records...
+            Checking admin credentials with updated policies...
           </div>
         </div>
       </div>

@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('🔍 Starting admin profile fetch for email:', userEmail);
       
-      // First, try to find in admins table using maybeSingle() to avoid 406 errors
+      // First, try to find in admins table - with new RLS policies, this should work
       console.log('🔍 Checking admins table...');
       const { data: adminData, error: adminError } = await supabase
         .from('admins')
@@ -59,14 +59,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      // If there was an error other than "no rows", log it but continue
-      if (adminError && adminError.code !== 'PGRST116') {
+      // Log any errors but continue to check clinicians
+      if (adminError) {
         console.log('⚠️ Admin table query error (continuing to clinicians):', adminError);
       }
 
       console.log('🔍 No admin found in admins table, checking clinicians...');
       
-      // Check clinicians table for admin clinicians using maybeSingle()
+      // Check clinicians table for admin clinicians
       const { data: clinicianData, error: clinicianError } = await supabase
         .from('clinicians')
         .select('*')
