@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -142,7 +143,7 @@ export default function Auth() {
 
       console.log('🌐 Testing basic Supabase connectivity...');
       try {
-        const healthCheck = await supabase.from('admins').select('count', { count: 'exact', head: true });
+        const healthCheck = await supabase.from('clinicians').select('count', { count: 'exact', head: true });
         console.log('💚 Supabase connectivity test:', healthCheck);
       } catch (healthError) {
         console.log('❌ Supabase connectivity test failed:', healthError);
