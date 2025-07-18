@@ -19,7 +19,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       userEmail: user?.email,
       hasAdminProfile: !!adminProfile,
       profileType: adminProfile?.profile_type,
-      adminEmail: adminProfile?.admin_email || adminProfile?.clinician_email
+      adminEmail: adminProfile?.clinician_email
     });
 
     if (!loading) {
@@ -28,22 +28,29 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         navigate('/auth');
       } else if (!adminProfile) {
         console.log('⚠️ User found but no admin profile, waiting a bit more...');
-        // Give it a moment for the admin profile to load with new RLS policies
+        // Give it a moment for the admin profile to load
         const timeout = setTimeout(() => {
           if (!adminProfile) {
             console.log('❌ Still no admin profile after timeout, redirecting to auth');
+            console.log('🔍 Final debug info:', {
+              userEmail: user?.email,
+              hasUser: !!user,
+              hasAdminProfile: !!adminProfile,
+              message: 'User exists but no clinician admin profile found'
+            });
             navigate('/auth');
           }
-        }, 2000); // Reduced timeout since new policies should be faster
+        }, 1500); // Reduced timeout since we're only checking one table now
 
         return () => clearTimeout(timeout);
       } else {
         console.log('✅ User and admin profile both present, access granted');
         console.log('📋 Admin profile details:', {
           type: adminProfile.profile_type,
-          email: adminProfile.admin_email || adminProfile.clinician_email,
-          firstName: adminProfile.admin_first_name || adminProfile.clinician_first_name,
-          lastName: adminProfile.admin_last_name || adminProfile.clinician_last_name
+          email: adminProfile.clinician_email,
+          firstName: adminProfile.clinician_first_name,
+          lastName: adminProfile.clinician_last_name,
+          isAdmin: adminProfile.is_admin
         });
       }
     }
@@ -80,7 +87,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
             Verifying admin access for {user.email}...
           </div>
           <div className="text-xs text-muted-foreground">
-            Checking admin credentials with updated policies...
+            Checking clinician admin credentials...
           </div>
         </div>
       </div>

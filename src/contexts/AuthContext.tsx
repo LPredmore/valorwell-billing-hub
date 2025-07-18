@@ -5,18 +5,12 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface AdminProfile {
   id: string;
-  admin_email?: string;
-  admin_first_name?: string;
-  admin_last_name?: string;
-  admin_status?: string;
-  admin_phone?: string;
-  // Clinician admin fields
   clinician_email?: string;
   clinician_first_name?: string;
   clinician_last_name?: string;
   clinician_phone?: string;
   is_admin?: boolean;
-  profile_type: 'admin' | 'clinician_admin';
+  profile_type: 'clinician_admin';
 }
 
 interface AuthContextType {
@@ -40,33 +34,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('🔍 Starting admin profile fetch for email:', userEmail);
       
-      // First, try to find in admins table - with new RLS policies, this should work
-      console.log('🔍 Checking admins table...');
-      const { data: adminData, error: adminError } = await supabase
-        .from('admins')
-        .select('*')
-        .eq('admin_email', userEmail)
-        .maybeSingle();
-
-      console.log('📋 Admin table query result:', { adminData, adminError });
-
-      // If we found an admin record and no error, return it
-      if (!adminError && adminData) {
-        console.log('✅ Admin profile found in admins table:', adminData);
-        return {
-          ...adminData,
-          profile_type: 'admin' as const
-        };
-      }
-
-      // Log any errors but continue to check clinicians
-      if (adminError) {
-        console.log('⚠️ Admin table query error (continuing to clinicians):', adminError);
-      }
-
-      console.log('🔍 No admin found in admins table, checking clinicians...');
-      
-      // Check clinicians table for admin clinicians
+      // Only check clinicians table for admin users (is_admin = true)
+      console.log('🔍 Checking clinicians table for admin users...');
       const { data: clinicianData, error: clinicianError } = await supabase
         .from('clinicians')
         .select('*')
@@ -74,11 +43,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('is_admin', true)
         .maybeSingle();
 
-      console.log('📋 Clinician table query result:', { clinicianData, clinicianError });
+      console.log('📋 Clinician admin query result:', { 
+        clinicianData, 
+        clinicianError,
+        userEmail,
+        queryDetails: {
+          table: 'clinicians',
+          filters: { clinician_email: userEmail, is_admin: true }
+        }
+      });
 
       if (!clinicianError && clinicianData) {
         console.log('✅ Clinician admin profile found:', clinicianData);
-        return {
+        const profile: AdminProfile = {
           id: clinicianData.id,
           clinician_email: clinicianData.clinician_email,
           clinician_first_name: clinicianData.clinician_first_name,
@@ -87,6 +64,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           is_admin: clinicianData.is_admin,
           profile_type: 'clinician_admin' as const
         };
+        
+        console.log('📋 Formatted admin profile:', profile);
+        return profile;
       }
 
       // If there was a clinician error, log it
@@ -94,7 +74,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('⚠️ Clinician table query error:', clinicianError);
       }
 
-      console.log('❌ No admin or clinician admin profile found for this email');
+      console.log('❌ No clinician admin profile found for this email');
+      console.log('🔍 Additional debug info:', {
+        searchEmail: userEmail,
+        clinicianFound: !!clinicianData,
+        isAdmin: clinicianData?.is_admin,
+        clinicianEmail: clinicianData?.clinician_email
+      });
+      
       return null;
     } catch (error) {
       console.error('💥 Exception in fetchAdminProfile:', error);
@@ -109,6 +96,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('🔄 Auth state changed:', event, session?.user?.email);
+        console.log('📋 Session details:', {
+          hasSession: !!session,
+          hasUser: !!session?.user,
+          userEmail: session?.user?.email,
+          eventType: event
+        });
         
         setSession(session);
         setUser(session?.user ?? null);
@@ -117,6 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('👤 User authenticated, fetching admin profile...');
           // Fetch admin profile for authenticated user
           const profile = await fetchAdminProfile(session.user.email);
+          console.log('📋 Profile fetch result:', profile);
           setAdminProfile(profile);
           
           if (profile) {
@@ -136,12 +130,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       console.log('🔍 Checking for existing session:', session?.user?.email);
+      console.log('📋 Initial session check:', {
+        hasSession: !!session,
+        hasUser: !!session?.user,
+        userEmail: session?.user?.email
+      });
       
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user?.email) {
         fetchAdminProfile(session.user.email).then(profile => {
+          console.log('📋 Initial profile fetch result:', profile);
           setAdminProfile(profile);
           setLoading(false);
         });
