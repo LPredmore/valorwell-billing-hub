@@ -40,7 +40,7 @@ export default function Auth() {
       userEmail: user?.email,
       adminProfile: !!adminProfile,
       profileType: adminProfile?.profile_type,
-      profileEmail: adminProfile?.admin_email || adminProfile?.clinician_email,
+      profileEmail: adminProfile?.clinician_email,
       authLoading
     });
 

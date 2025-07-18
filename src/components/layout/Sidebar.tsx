@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -87,7 +86,7 @@ export default function Sidebar() {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="right">
-                  {adminProfile.admin_first_name} {adminProfile.admin_last_name}
+                  {adminProfile.clinician_first_name} {adminProfile.clinician_last_name}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -98,10 +97,10 @@ export default function Sidebar() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">
-                  {adminProfile.admin_first_name} {adminProfile.admin_last_name}
+                  {adminProfile.clinician_first_name} {adminProfile.clinician_last_name}
                 </p>
                 <p className="text-xs text-gray-500 truncate">
-                  {adminProfile.admin_email}
+                  {adminProfile.clinician_email}
                 </p>
               </div>
             </div>
