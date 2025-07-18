@@ -31,30 +31,136 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchAdminProfile = async (userEmail: string): Promise<AdminProfile | null> => {
+    const startTime = performance.now();
+    const correlationId = `profile-fetch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    console.log(`🔍 [${correlationId}] Starting admin profile fetch for email:`, userEmail);
+    console.log(`🔍 [${correlationId}] Fetch start time:`, new Date().toISOString());
+    console.log(`🔍 [${correlationId}] Supabase client status:`, {
+      clientReady: !!supabase,
+      authReady: !!supabase.auth
+    });
+
     try {
-      console.log('🔍 Starting admin profile fetch for email:', userEmail);
+      // Test basic connectivity first
+      console.log(`🌐 [${correlationId}] Testing basic Supabase connectivity...`);
+      const connectivityStart = performance.now();
       
-      // Only check clinicians table for admin users (is_admin = true)
-      console.log('🔍 Checking clinicians table for admin users...');
-      const { data: clinicianData, error: clinicianError } = await supabase
+      try {
+        const healthCheck = await Promise.race([
+          supabase.from('clinicians').select('count', { count: 'exact', head: true }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Connectivity timeout')), 5000))
+        ]);
+        console.log(`✅ [${correlationId}] Connectivity test passed (${(performance.now() - connectivityStart).toFixed(2)}ms):`, healthCheck);
+      } catch (connectivityError) {
+        console.error(`❌ [${correlationId}] Connectivity test failed:`, connectivityError);
+        throw new Error(`Database connectivity failed: ${connectivityError.message}`);
+      }
+
+      // Check current auth state
+      console.log(`🔐 [${correlationId}] Checking current auth state...`);
+      const authStateStart = performance.now();
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      console.log(`📋 [${correlationId}] Auth state check (${(performance.now() - authStateStart).toFixed(2)}ms):`, {
+        hasSession: !!sessionData.session,
+        hasUser: !!sessionData.session?.user,
+        userEmail: sessionData.session?.user?.email,
+        sessionError,
+        accessToken: sessionData.session?.access_token ? 'present' : 'missing',
+        tokenType: sessionData.session?.token_type
+      });
+
+      if (sessionError) {
+        console.error(`❌ [${correlationId}] Session error:`, sessionError);
+      }
+
+      // Test database permissions
+      console.log(`🔑 [${correlationId}] Testing database permissions...`);
+      const permissionsStart = performance.now();
+      
+      try {
+        const permissionTest = await Promise.race([
+          supabase.from('clinicians').select('id', { count: 'exact' }).limit(1),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Permission test timeout')), 5000))
+        ]);
+        console.log(`✅ [${correlationId}] Permission test passed (${(performance.now() - permissionsStart).toFixed(2)}ms):`, permissionTest);
+      } catch (permissionError) {
+        console.error(`❌ [${correlationId}] Permission test failed:`, permissionError);
+        console.log(`🔍 [${correlationId}] Permission error details:`, {
+          name: permissionError.name,
+          message: permissionError.message,
+          stack: permissionError.stack
+        });
+      }
+
+      console.log(`🔍 [${correlationId}] Starting clinicians table query...`);
+      console.log(`🔍 [${correlationId}] Query details:`, {
+        table: 'clinicians',
+        select: '*',
+        filter1: { column: 'clinician_email', operator: 'eq', value: userEmail },
+        filter2: { column: 'is_admin', operator: 'eq', value: true },
+        method: 'maybeSingle'
+      });
+
+      const queryStart = performance.now();
+      
+      // Execute the query with timeout
+      const queryPromise = supabase
         .from('clinicians')
         .select('*')
         .eq('clinician_email', userEmail)
         .eq('is_admin', true)
         .maybeSingle();
 
-      console.log('📋 Clinician admin query result:', { 
-        clinicianData, 
-        clinicianError,
-        userEmail,
-        queryDetails: {
-          table: 'clinicians',
-          filters: { clinician_email: userEmail, is_admin: true }
-        }
+      console.log(`⏳ [${correlationId}] Query promise created, executing...`);
+
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Query timeout after 10 seconds')), 10000)
+      );
+
+      const { data: clinicianData, error: clinicianError } = await Promise.race([
+        queryPromise,
+        timeoutPromise
+      ]) as any;
+
+      const queryDuration = performance.now() - queryStart;
+      console.log(`📋 [${correlationId}] Query completed (${queryDuration.toFixed(2)}ms)`);
+      
+      console.log(`📋 [${correlationId}] Raw query response:`, {
+        data: clinicianData,
+        error: clinicianError,
+        dataType: typeof clinicianData,
+        errorType: typeof clinicianError,
+        dataKeys: clinicianData ? Object.keys(clinicianData) : null,
+        errorDetails: clinicianError ? {
+          message: clinicianError.message,
+          details: clinicianError.details,
+          hint: clinicianError.hint,
+          code: clinicianError.code
+        } : null
       });
 
+      if (clinicianError) {
+        console.error(`❌ [${correlationId}] Clinician query error:`, clinicianError);
+        console.log(`🔍 [${correlationId}] Error analysis:`, {
+          isTimeoutError: clinicianError.message?.includes('timeout'),
+          isPermissionError: clinicianError.message?.includes('permission') || clinicianError.message?.includes('policy'),
+          isNetworkError: clinicianError.message?.includes('network') || clinicianError.message?.includes('connection'),
+          fullError: JSON.stringify(clinicianError, null, 2)
+        });
+        
+        // Don't throw here, continue processing
+      }
+
       if (!clinicianError && clinicianData) {
-        console.log('✅ Clinician admin profile found:', clinicianData);
+        console.log(`✅ [${correlationId}] Clinician admin profile found:`, {
+          id: clinicianData.id,
+          email: clinicianData.clinician_email,
+          isAdmin: clinicianData.is_admin,
+          firstName: clinicianData.clinician_first_name,
+          lastName: clinicianData.clinician_last_name
+        });
+        
         const profile: AdminProfile = {
           id: clinicianData.id,
           clinician_email: clinicianData.clinician_email,
@@ -65,125 +171,209 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           profile_type: 'clinician_admin' as const
         };
         
-        console.log('📋 Formatted admin profile:', profile);
+        console.log(`📋 [${correlationId}] Formatted admin profile:`, profile);
+        console.log(`✅ [${correlationId}] Profile fetch completed successfully in ${(performance.now() - startTime).toFixed(2)}ms`);
         return profile;
       }
 
-      // If there was a clinician error, log it
-      if (clinicianError) {
-        console.log('⚠️ Clinician table query error:', clinicianError);
-      }
-
-      console.log('❌ No clinician admin profile found for this email');
-      console.log('🔍 Additional debug info:', {
+      console.log(`❌ [${correlationId}] No clinician admin profile found`);
+      console.log(`🔍 [${correlationId}] Search criteria debug:`, {
         searchEmail: userEmail,
-        clinicianFound: !!clinicianData,
-        isAdmin: clinicianData?.is_admin,
-        clinicianEmail: clinicianData?.clinician_email
+        exactEmailMatch: clinicianData?.clinician_email === userEmail,
+        isAdminValue: clinicianData?.is_admin,
+        emailInDatabase: clinicianData?.clinician_email,
+        adminFlagType: typeof clinicianData?.is_admin
       });
+
+      // Try a broader search for debugging
+      console.log(`🔍 [${correlationId}] Attempting broader search for debugging...`);
+      try {
+        const debugQueryStart = performance.now();
+        const { data: allClinicians, error: debugError } = await supabase
+          .from('clinicians')
+          .select('clinician_email, is_admin, id')
+          .eq('clinician_email', userEmail);
+          
+        console.log(`🔍 [${correlationId}] Debug query results (${(performance.now() - debugQueryStart).toFixed(2)}ms):`, {
+          allMatches: allClinicians,
+          debugError,
+          matchCount: allClinicians?.length || 0
+        });
+      } catch (debugErr) {
+        console.error(`❌ [${correlationId}] Debug query failed:`, debugErr);
+      }
       
+      console.log(`❌ [${correlationId}] Profile fetch completed with no results in ${(performance.now() - startTime).toFixed(2)}ms`);
       return null;
+      
     } catch (error) {
-      console.error('💥 Exception in fetchAdminProfile:', error);
+      const totalDuration = performance.now() - startTime;
+      console.error(`💥 [${correlationId}] Exception in fetchAdminProfile after ${totalDuration.toFixed(2)}ms:`, error);
+      console.log(`🔍 [${correlationId}] Exception details:`, {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        isTimeoutError: error.message?.includes('timeout'),
+        isNetworkError: error.message?.includes('network') || error.message?.includes('connection'),
+        errorType: typeof error
+      });
       return null;
     }
   };
 
   useEffect(() => {
-    console.log('🚀 Setting up auth state listener');
+    const effectId = `auth-effect-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    console.log(`🚀 [${effectId}] Setting up auth state listener`);
     
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('🔄 Auth state changed:', event, session?.user?.email);
-        console.log('📋 Session details:', {
+        const changeId = `auth-change-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+        console.log(`🔄 [${changeId}] Auth state changed:`, {
+          event,
+          userEmail: session?.user?.email,
           hasSession: !!session,
           hasUser: !!session?.user,
-          userEmail: session?.user?.email,
-          eventType: event
+          hasAccessToken: !!session?.access_token,
+          timestamp: new Date().toISOString()
+        });
+        
+        console.log(`📋 [${changeId}] Full session details:`, {
+          user: session?.user ? {
+            id: session.user.id,
+            email: session.user.email,
+            role: session.user.role,
+            createdAt: session.user.created_at
+          } : null,
+          accessToken: session?.access_token ? 'present' : 'missing',
+          refreshToken: session?.refresh_token ? 'present' : 'missing',
+          expiresAt: session?.expires_at,
+          tokenType: session?.token_type
         });
         
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user?.email) {
-          console.log('👤 User authenticated, fetching admin profile...');
+          console.log(`👤 [${changeId}] User authenticated, fetching admin profile...`);
           try {
+            setLoading(true); // Ensure loading state is set
+            console.log(`⏳ [${changeId}] Setting loading to true before profile fetch`);
+            
             // Fetch admin profile for authenticated user
+            const profileFetchStart = performance.now();
             const profile = await fetchAdminProfile(session.user.email);
-            console.log('📋 Profile fetch result:', profile);
+            const profileFetchDuration = performance.now() - profileFetchStart;
+            
+            console.log(`📋 [${changeId}] Profile fetch completed in ${profileFetchDuration.toFixed(2)}ms:`, {
+              profileFound: !!profile,
+              profileType: profile?.profile_type,
+              profileEmail: profile?.clinician_email,
+              profileId: profile?.id
+            });
+            
             setAdminProfile(profile);
             
             if (profile) {
-              console.log('✅ Admin profile loaded successfully:', profile.profile_type);
+              console.log(`✅ [${changeId}] Admin profile loaded successfully:`, profile.profile_type);
             } else {
-              console.log('⚠️ No admin profile found for this email');
+              console.log(`⚠️ [${changeId}] No admin profile found for this email`);
             }
           } catch (error) {
-            console.error('💥 Error fetching admin profile:', error);
+            console.error(`💥 [${changeId}] Error fetching admin profile:`, error);
             setAdminProfile(null);
           } finally {
+            console.log(`⏳ [${changeId}] Setting loading to false after profile fetch`);
             setLoading(false);
           }
         } else {
-          console.log('🚪 No authenticated user, clearing admin profile');
+          console.log(`🚪 [${changeId}] No authenticated user, clearing admin profile`);
           setAdminProfile(null);
           setLoading(false);
         }
       }
     );
 
+    console.log(`📡 [${effectId}] Auth listener subscription created:`, subscription);
+
     // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('🔍 Checking for existing session:', session?.user?.email);
-      console.log('📋 Initial session check:', {
+    console.log(`🔍 [${effectId}] Checking for existing session...`);
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      const sessionCheckId = `session-check-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      console.log(`🔍 [${sessionCheckId}] Initial session check result:`, {
         hasSession: !!session,
         hasUser: !!session?.user,
-        userEmail: session?.user?.email
+        userEmail: session?.user?.email,
+        error,
+        timestamp: new Date().toISOString()
       });
+      
+      if (error) {
+        console.error(`❌ [${sessionCheckId}] Session check error:`, error);
+      }
       
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user?.email) {
+        console.log(`👤 [${sessionCheckId}] Existing session found, fetching profile...`);
         fetchAdminProfile(session.user.email).then(profile => {
-          console.log('📋 Initial profile fetch result:', profile);
+          console.log(`📋 [${sessionCheckId}] Initial profile fetch result:`, profile);
           setAdminProfile(profile);
           setLoading(false);
         }).catch(error => {
-          console.error('💥 Error in initial profile fetch:', error);
+          console.error(`💥 [${sessionCheckId}] Error in initial profile fetch:`, error);
           setAdminProfile(null);
           setLoading(false);
         });
       } else {
+        console.log(`🚪 [${sessionCheckId}] No existing session found`);
         setLoading(false);
       }
+    }).catch(error => {
+      console.error(`💥 [${effectId}] Error getting initial session:`, error);
+      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      console.log(`🧹 [${effectId}] Cleaning up auth listener subscription`);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    console.log('🔑 Attempting sign in for:', email);
+    const signInId = `signin-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    console.log(`🔑 [${signInId}] Attempting sign in for:`, email);
+    console.log(`🔑 [${signInId}] Sign in start time:`, new Date().toISOString());
+    
+    const signInStart = performance.now();
     
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
     
+    const signInDuration = performance.now() - signInStart;
+    
     if (error) {
-      console.error('❌ Sign in error:', error);
+      console.error(`❌ [${signInId}] Sign in error (${signInDuration.toFixed(2)}ms):`, {
+        message: error.message,
+        status: error.status,
+        details: error
+      });
     } else {
-      console.log('✅ Sign in successful');
+      console.log(`✅ [${signInId}] Sign in successful (${signInDuration.toFixed(2)}ms)`);
     }
     
     return { error };
   };
 
   const signOut = async () => {
-    console.log('🚪 Signing out user');
+    const signOutId = `signout-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    console.log(`🚪 [${signOutId}] Signing out user`);
     await supabase.auth.signOut();
     setAdminProfile(null);
+    console.log(`✅ [${signOutId}] Sign out completed`);
   };
 
   const value = {
