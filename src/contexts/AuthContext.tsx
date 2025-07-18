@@ -108,22 +108,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (session?.user?.email) {
           console.log('👤 User authenticated, fetching admin profile...');
-          // Fetch admin profile for authenticated user
-          const profile = await fetchAdminProfile(session.user.email);
-          console.log('📋 Profile fetch result:', profile);
-          setAdminProfile(profile);
-          
-          if (profile) {
-            console.log('✅ Admin profile loaded successfully:', profile.profile_type);
-          } else {
-            console.log('⚠️ No admin profile found for this email');
+          try {
+            // Fetch admin profile for authenticated user
+            const profile = await fetchAdminProfile(session.user.email);
+            console.log('📋 Profile fetch result:', profile);
+            setAdminProfile(profile);
+            
+            if (profile) {
+              console.log('✅ Admin profile loaded successfully:', profile.profile_type);
+            } else {
+              console.log('⚠️ No admin profile found for this email');
+            }
+          } catch (error) {
+            console.error('💥 Error fetching admin profile:', error);
+            setAdminProfile(null);
+          } finally {
+            setLoading(false);
           }
         } else {
           console.log('🚪 No authenticated user, clearing admin profile');
           setAdminProfile(null);
+          setLoading(false);
         }
-        
-        setLoading(false);
       }
     );
 
@@ -143,6 +149,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         fetchAdminProfile(session.user.email).then(profile => {
           console.log('📋 Initial profile fetch result:', profile);
           setAdminProfile(profile);
+          setLoading(false);
+        }).catch(error => {
+          console.error('💥 Error in initial profile fetch:', error);
+          setAdminProfile(null);
           setLoading(false);
         });
       } else {

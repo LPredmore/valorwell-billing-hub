@@ -24,7 +24,7 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const { signIn, user, adminProfile, loading: authLoading } = useAuth();
+  const { signIn, signOut, user, adminProfile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
@@ -42,12 +42,16 @@ export default function Auth() {
       adminProfile: !!adminProfile,
       profileType: adminProfile?.profile_type,
       profileEmail: adminProfile?.clinician_email,
-      authLoading
+      authLoading,
+      redirectConditionsMet: !authLoading && user && adminProfile
     });
 
+    // Only redirect when loading is complete AND we have both user and admin profile
     if (!authLoading && user && adminProfile) {
       console.log('✅ User fully authenticated with admin profile, redirecting to dashboard');
       navigate('/', { replace: true });
+    } else if (!authLoading && user && !adminProfile) {
+      console.log('⚠️ User authenticated but no admin profile found - staying on auth page');
     }
   }, [user, adminProfile, authLoading, navigate]);
 
@@ -211,6 +215,31 @@ export default function Auth() {
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-valorwell-purple mx-auto mb-4"></div>
               <p>Checking authentication...</p>
+              <div className="text-xs text-gray-500 mt-2">
+                User: {user ? '✓' : '○'} | Profile: {adminProfile ? '✓' : '○'}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show error if user is authenticated but no admin profile found
+  if (user && !authLoading && !adminProfile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <Alert variant="destructive">
+                <AlertDescription>
+                  Access denied. No admin profile found for this account.
+                </AlertDescription>
+              </Alert>
+              <Button onClick={() => signOut()} className="mt-4 w-full" variant="outline">
+                Sign Out
+              </Button>
             </div>
           </CardContent>
         </Card>
