@@ -31,37 +31,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchAdminProfile = async (userEmail: string): Promise<AdminProfile | null> => {
+    // IMMEDIATE FORCED LOGGING - SHOULD SHOW UP
+    console.error("🔥🔥🔥 FETCHADMINPROFILE START - NEW VERSION:", userEmail);
+    console.error("🔥🔥🔥 TIMESTAMP:", new Date().toISOString());
+    
     const startTime = performance.now();
     const correlationId = `profile-fetch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    console.log(`🔍 [${correlationId}] Starting admin profile fetch for email:`, userEmail);
-    console.log(`🔍 [${correlationId}] Fetch start time:`, new Date().toISOString());
-    console.log(`🔍 [${correlationId}] Supabase client status:`, {
+    console.error(`🔥 [${correlationId}] Starting admin profile fetch for email:`, userEmail);
+    console.error(`🔥 [${correlationId}] Fetch start time:`, new Date().toISOString());
+    console.error(`🔥 [${correlationId}] Supabase client status:`, {
       clientReady: !!supabase,
       authReady: !!supabase.auth
     });
 
     try {
       // Test basic connectivity first
-      console.log(`🌐 [${correlationId}] Testing basic Supabase connectivity...`);
+      console.error(`🔥 [${correlationId}] Testing basic Supabase connectivity...`);
       const connectivityStart = performance.now();
       
       try {
+        console.error(`🔥 [${correlationId}] About to execute health check query...`);
         const healthCheck = await Promise.race([
           supabase.from('clinicians').select('count', { count: 'exact', head: true }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Connectivity timeout')), 5000))
         ]);
-        console.log(`✅ [${correlationId}] Connectivity test passed (${(performance.now() - connectivityStart).toFixed(2)}ms):`, healthCheck);
+        console.error(`🔥 [${correlationId}] Connectivity test passed (${(performance.now() - connectivityStart).toFixed(2)}ms):`, healthCheck);
       } catch (connectivityError) {
-        console.error(`❌ [${correlationId}] Connectivity test failed:`, connectivityError);
-        throw new Error(`Database connectivity failed: ${connectivityError.message}`);
+        console.error(`🔥 [${correlationId}] Connectivity test failed:`, connectivityError);
+        console.error(`🔥 [${correlationId}] Returning null due to connectivity failure`);
+        return null;
       }
 
       // Check current auth state
-      console.log(`🔐 [${correlationId}] Checking current auth state...`);
+      console.error(`🔥 [${correlationId}] Checking current auth state...`);
       const authStateStart = performance.now();
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      console.log(`📋 [${correlationId}] Auth state check (${(performance.now() - authStateStart).toFixed(2)}ms):`, {
+      console.error(`🔥 [${correlationId}] Auth state check (${(performance.now() - authStateStart).toFixed(2)}ms):`, {
         hasSession: !!sessionData.session,
         hasUser: !!sessionData.session?.user,
         userEmail: sessionData.session?.user?.email,
@@ -71,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (sessionError) {
-        console.error(`❌ [${correlationId}] Session error:`, sessionError);
+        console.error(`🔥 [${correlationId}] Session error:`, sessionError);
       }
 
       // Test database permissions
@@ -93,8 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      console.log(`🔍 [${correlationId}] Starting clinicians table query...`);
-      console.log(`🔍 [${correlationId}] Query details:`, {
+      console.error(`🔥 [${correlationId}] Starting clinicians table query...`);
+      console.error(`🔥 [${correlationId}] Query details:`, {
         table: 'clinicians',
         select: '*',
         filter1: { column: 'clinician_email', operator: 'eq', value: userEmail },
@@ -105,6 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const queryStart = performance.now();
       
       // Execute the query with timeout
+      console.error(`🔥 [${correlationId}] Creating query promise...`);
       const queryPromise = supabase
         .from('clinicians')
         .select('*')
@@ -112,111 +119,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('is_admin', true)
         .maybeSingle();
 
-      console.log(`⏳ [${correlationId}] Query promise created, executing...`);
+      console.error(`🔥 [${correlationId}] Query promise created, executing with 3 second timeout...`);
 
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Query timeout after 10 seconds')), 10000)
+        setTimeout(() => {
+          console.error(`🔥 [${correlationId}] QUERY TIMEOUT - 3 seconds elapsed`);
+          reject(new Error('Query timeout after 3 seconds'));
+        }, 3000)
       );
 
-      const { data: clinicianData, error: clinicianError } = await Promise.race([
-        queryPromise,
-        timeoutPromise
-      ]) as any;
-
-      const queryDuration = performance.now() - queryStart;
-      console.log(`📋 [${correlationId}] Query completed (${queryDuration.toFixed(2)}ms)`);
-      
-      console.log(`📋 [${correlationId}] Raw query response:`, {
-        data: clinicianData,
-        error: clinicianError,
-        dataType: typeof clinicianData,
-        errorType: typeof clinicianError,
-        dataKeys: clinicianData ? Object.keys(clinicianData) : null,
-        errorDetails: clinicianError ? {
-          message: clinicianError.message,
-          details: clinicianError.details,
-          hint: clinicianError.hint,
-          code: clinicianError.code
-        } : null
-      });
-
-      if (clinicianError) {
-        console.error(`❌ [${correlationId}] Clinician query error:`, clinicianError);
-        console.log(`🔍 [${correlationId}] Error analysis:`, {
-          isTimeoutError: clinicianError.message?.includes('timeout'),
-          isPermissionError: clinicianError.message?.includes('permission') || clinicianError.message?.includes('policy'),
-          isNetworkError: clinicianError.message?.includes('network') || clinicianError.message?.includes('connection'),
-          fullError: JSON.stringify(clinicianError, null, 2)
-        });
-        
-        // Don't throw here, continue processing
-      }
-
-      if (!clinicianError && clinicianData) {
-        console.log(`✅ [${correlationId}] Clinician admin profile found:`, {
-          id: clinicianData.id,
-          email: clinicianData.clinician_email,
-          isAdmin: clinicianData.is_admin,
-          firstName: clinicianData.clinician_first_name,
-          lastName: clinicianData.clinician_last_name
-        });
-        
-        const profile: AdminProfile = {
-          id: clinicianData.id,
-          clinician_email: clinicianData.clinician_email,
-          clinician_first_name: clinicianData.clinician_first_name,
-          clinician_last_name: clinicianData.clinician_last_name,
-          clinician_phone: clinicianData.clinician_phone,
-          is_admin: clinicianData.is_admin,
-          profile_type: 'clinician_admin' as const
-        };
-        
-        console.log(`📋 [${correlationId}] Formatted admin profile:`, profile);
-        console.log(`✅ [${correlationId}] Profile fetch completed successfully in ${(performance.now() - startTime).toFixed(2)}ms`);
-        return profile;
-      }
-
-      console.log(`❌ [${correlationId}] No clinician admin profile found`);
-      console.log(`🔍 [${correlationId}] Search criteria debug:`, {
-        searchEmail: userEmail,
-        exactEmailMatch: clinicianData?.clinician_email === userEmail,
-        isAdminValue: clinicianData?.is_admin,
-        emailInDatabase: clinicianData?.clinician_email,
-        adminFlagType: typeof clinicianData?.is_admin
-      });
-
-      // Try a broader search for debugging
-      console.log(`🔍 [${correlationId}] Attempting broader search for debugging...`);
       try {
-        const debugQueryStart = performance.now();
-        const { data: allClinicians, error: debugError } = await supabase
-          .from('clinicians')
-          .select('clinician_email, is_admin, id')
-          .eq('clinician_email', userEmail);
-          
-        console.log(`🔍 [${correlationId}] Debug query results (${(performance.now() - debugQueryStart).toFixed(2)}ms):`, {
-          allMatches: allClinicians,
-          debugError,
-          matchCount: allClinicians?.length || 0
-        });
-      } catch (debugErr) {
-        console.error(`❌ [${correlationId}] Debug query failed:`, debugErr);
-      }
+        console.error(`🔥 [${correlationId}] Executing Promise.race...`);
+        const { data: clinicianData, error: clinicianError } = await Promise.race([
+          queryPromise,
+          timeoutPromise
+        ]) as any;
+
+        const queryDuration = performance.now() - queryStart;
+        console.error(`🔥 [${correlationId}] Query completed (${queryDuration.toFixed(2)}ms)`);
       
-      console.log(`❌ [${correlationId}] Profile fetch completed with no results in ${(performance.now() - startTime).toFixed(2)}ms`);
-      return null;
+        console.error(`🔥 [${correlationId}] Raw query response:`, {
+          data: clinicianData,
+          error: clinicianError,
+          dataType: typeof clinicianData,
+          errorType: typeof clinicianError,
+          dataKeys: clinicianData ? Object.keys(clinicianData) : null,
+          errorDetails: clinicianError ? {
+            message: clinicianError.message,
+            details: clinicianError.details,
+            hint: clinicianError.hint,
+            code: clinicianError.code
+          } : null
+        });
+
+        if (clinicianError) {
+          console.error(`🔥 [${correlationId}] Clinician query error:`, clinicianError);
+          console.error(`🔥 [${correlationId}] RETURNING NULL DUE TO QUERY ERROR`);
+          return null;
+        }
+
+        if (clinicianData) {
+          console.error(`🔥 [${correlationId}] Profile found, formatting...`);
+          const profile: AdminProfile = {
+            id: clinicianData.id,
+            clinician_email: clinicianData.clinician_email,
+            clinician_first_name: clinicianData.clinician_first_name,
+            clinician_last_name: clinicianData.clinician_last_name,
+            clinician_phone: clinicianData.clinician_phone,
+            is_admin: clinicianData.is_admin,
+            profile_type: 'clinician_admin' as const
+          };
+          
+          console.error(`🔥 [${correlationId}] Formatted admin profile:`, profile);
+          console.error(`🔥 [${correlationId}] RETURNING PROFILE - SUCCESS`);
+          return profile;
+        }
+
+        console.error(`🔥 [${correlationId}] NO DATA FOUND - RETURNING NULL`);
+        return null;
+
+      } catch (queryError) {
+        console.error(`🔥 [${correlationId}] Query execution failed:`, queryError);
+        console.error(`🔥 [${correlationId}] RETURNING NULL DUE TO QUERY EXCEPTION`);
+        return null;
+      }
       
     } catch (error) {
       const totalDuration = performance.now() - startTime;
-      console.error(`💥 [${correlationId}] Exception in fetchAdminProfile after ${totalDuration.toFixed(2)}ms:`, error);
-      console.log(`🔍 [${correlationId}] Exception details:`, {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-        isTimeoutError: error.message?.includes('timeout'),
-        isNetworkError: error.message?.includes('network') || error.message?.includes('connection'),
-        errorType: typeof error
-      });
+      console.error(`🔥 [${correlationId}] EXCEPTION in fetchAdminProfile after ${totalDuration.toFixed(2)}ms:`, error);
+      console.error(`🔥 [${correlationId}] RETURNING NULL DUE TO EXCEPTION`);
       return null;
     }
   };
