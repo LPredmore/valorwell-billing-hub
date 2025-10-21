@@ -11,13 +11,10 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  LogOut,
-  User,
   AlertTriangle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useAuth } from '@/contexts/AuthContext';
 
 type SidebarItem = {
   name: string;
@@ -40,14 +37,8 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { adminProfile, signOut } = useAuth();
 
   const toggleSidebar = () => setCollapsed(!collapsed);
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/auth');
-  };
 
   return (
     <div 
@@ -73,40 +64,6 @@ export default function Sidebar() {
           {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
         </Button>
       </div>
-
-      {/* User Info Section */}
-      {adminProfile && (
-        <div className={cn("p-4 border-b border-gray-200", collapsed && "px-2")}>
-          {collapsed ? (
-            <TooltipProvider>
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <div className="flex justify-center">
-                    <User size={20} className="text-gray-600" />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  {adminProfile.clinician_first_name} {adminProfile.clinician_last_name}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ) : (
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-valorwell-purple rounded-full flex items-center justify-center">
-                <User size={16} className="text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {adminProfile.clinician_first_name} {adminProfile.clinician_last_name}
-                </p>
-                <p className="text-xs text-gray-500 truncate">
-                  {adminProfile.clinician_email}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
       
       <nav className="flex-1 py-6 overflow-y-auto">
         <ul className="space-y-1 px-2">
@@ -156,43 +113,14 @@ export default function Sidebar() {
         </ul>
       </nav>
       
-      {/* Logout Button */}
-      <div className="p-4 border-t border-gray-200">
-        {collapsed ? (
-          <TooltipProvider>
-            <Tooltip delayDuration={0}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleSignOut}
-                  className="w-full"
-                >
-                  <LogOut size={20} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                Sign Out
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        ) : (
-          <Button
-            variant="ghost"
-            onClick={handleSignOut}
-            className="w-full justify-start text-gray-600 hover:text-gray-900"
-          >
-            <LogOut size={20} className="mr-3" />
-            Sign Out
-          </Button>
-        )}
-        
-        {!collapsed && (
-          <div className="text-xs text-gray-500 mt-4">
+      {/* Footer */}
+      {!collapsed && (
+        <div className="p-4 border-t border-gray-200">
+          <div className="text-xs text-gray-500">
             ValorWell Billing Hub v1.0
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
