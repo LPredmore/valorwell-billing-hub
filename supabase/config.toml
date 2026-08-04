@@ -21,5 +21,8 @@ verify_jwt = false
 [functions.givebutter-webhook]
 verify_jwt = false
 
+[functions.givebutter-webhook-v2]
+verify_jwt = false
+
 [functions.google-ads-givebutter-feed]
 verify_jwt = false
