@@ -3,6 +3,8 @@ const EXPECTED_PASS_SHA256 = "c57b3b725ca30e503aefd8548ae79ee6c73baa2af13178e50e
 const CONVERSION_ACTION = "Givebutter Donation";
 const MAX_CLICK_AGE_DAYS = 90;
 const MINIMUM_AGE_HOURS = 6;
+const SCHEMA_SENTINEL_GCLID = "SCHEMA_ONLY_DO_NOT_IMPORT";
+const SCHEMA_SENTINEL_ORDER_ID = "__schema_bootstrap__";
 
 type DonationRow = {
   transaction_id: string;
@@ -107,11 +109,25 @@ Deno.serve(async (req: Request) => {
   }
   const donations = await donationRes.json() as DonationRow[];
 
-  // Google Ads Data Manager requires the first row to contain readable column
-  // headers. Fields are explicitly separated so the connection can map every
-  // supported click identifier, including privacy-safe iOS BRAIDs.
+  // Google Ads Data Manager cannot discover a header-only HTTPS CSV. Keep one
+  // permanent schema bootstrap row so the connection remains selectable before
+  // the first attributable donation. Consumers must filter record_type to
+  // "conversion". The sentinel is also intentionally invalid, zero-valued, and
+  // older than the attribution window so it cannot become a real conversion if
+  // a filter is accidentally omitted.
   const lines = [
-    "gclid,gbraid,wbraid,conversion_action,conversion_date_time,conversion_value,currency_code,order_id",
+    "record_type,gclid,gbraid,wbraid,conversion_action,conversion_date_time,conversion_value,currency_code,order_id",
+    csvLine([
+      "schema",
+      SCHEMA_SENTINEL_GCLID,
+      "",
+      "",
+      CONVERSION_ACTION,
+      "2000-01-01T00:00:00Z",
+      "0.00",
+      "USD",
+      SCHEMA_SENTINEL_ORDER_ID,
+    ]),
   ];
   if (!donations.length) return csvResponse(lines);
 
@@ -141,6 +157,7 @@ Deno.serve(async (req: Request) => {
     if (!Number.isFinite(amount) || amount <= 0) continue;
 
     lines.push(csvLine([
+      "conversion",
       attribution.gclid ?? "",
       attribution.gbraid ?? "",
       attribution.wbraid ?? "",
