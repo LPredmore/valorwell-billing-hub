@@ -1,6 +1,6 @@
 const EXPECTED_USER_SHA256 = "1b1777f65aa4eee57c76d02e4abb51db5fa5985161d27242c7adc2683e33a44e";
 const EXPECTED_PASS_SHA256 = "c57b3b725ca30e503aefd8548ae79ee6c73baa2af13178e50e973daa71be0fbb";
-const CONVERSION_NAME = "Givebutter Donation";
+const CONVERSION_ACTION = "Givebutter Donation";
 const MAX_CLICK_AGE_DAYS = 90;
 const MINIMUM_AGE_HOURS = 6;
 
@@ -59,12 +59,6 @@ function csvLine(fields: Array<string | number>) {
   return fields.map((value) => escapeCsv(String(value ?? ""))).join(",");
 }
 
-function toGoogleAdsTime(value: string) {
-  const date = new Date(value);
-  const pad = (number: number) => String(number).padStart(2, "0");
-  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}+0000`;
-}
-
 function quoteIn(value: string) {
   return `"${value.replace(/"/g, '""')}"`;
 }
@@ -113,9 +107,11 @@ Deno.serve(async (req: Request) => {
   }
   const donations = await donationRes.json() as DonationRow[];
 
+  // Google Ads Data Manager requires the first row to contain readable column
+  // headers. Fields are explicitly separated so the connection can map every
+  // supported click identifier, including privacy-safe iOS BRAIDs.
   const lines = [
-    "Parameters:TimeZone=+0000",
-    "Google Click ID,Conversion Name,Conversion Time,Conversion Value,Conversion Currency,Order ID",
+    "gclid,gbraid,wbraid,conversion_action,conversion_date_time,conversion_value,currency_code,order_id",
   ];
   if (!donations.length) return csvResponse(lines);
 
@@ -137,7 +133,7 @@ Deno.serve(async (req: Request) => {
   for (const donation of donations) {
     if (!donation.token || !donation.donated_at) continue;
     const attribution = attributionByToken.get(donation.token);
-    if (!attribution?.gclid) continue;
+    if (!attribution?.gclid && !attribution?.gbraid && !attribution?.wbraid) continue;
 
     const timestamp = Date.parse(donation.donated_at);
     const amount = Number(donation.amount);
@@ -145,9 +141,11 @@ Deno.serve(async (req: Request) => {
     if (!Number.isFinite(amount) || amount <= 0) continue;
 
     lines.push(csvLine([
-      attribution.gclid,
-      CONVERSION_NAME,
-      toGoogleAdsTime(donation.donated_at),
+      attribution.gclid ?? "",
+      attribution.gbraid ?? "",
+      attribution.wbraid ?? "",
+      CONVERSION_ACTION,
+      new Date(timestamp).toISOString(),
       amount.toFixed(2),
       String(donation.currency ?? "USD").toUpperCase(),
       donation.transaction_id,
