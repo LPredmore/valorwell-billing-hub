@@ -3,12 +3,12 @@ const OPERATING_ACCOUNT_ID = "6832312938";
 const LOGIN_ACCOUNT_ID = "7235774362";
 const CONVERSION_ACTION_ID = "7710648169";
 const DATA_MANAGER_SCOPE = "https://www.googleapis.com/auth/datamanager";
-const DATA_MANAGER_INGEST_URL = "https://datamanager.googleapis.com/v1/events:ingest";
-const DATA_MANAGER_STATUS_URL = "https://datamanager.googleapis.com/v1/requestStatus:retrieve";
-const FIRST_DIAGNOSTIC_DELAY_MINUTES = 30;
+const INGEST_URL = "https://datamanager.googleapis.com/v1/events:ingest";
+const STATUS_URL = "https://datamanager.googleapis.com/v1/requestStatus:retrieve";
 const MAX_ATTEMPTS = 5;
+const DIAGNOSTIC_DELAY_MINUTES = 30;
 
-type JsonRecord = Record<string, unknown>;
+type JsonObject = Record<string, unknown>;
 
 type ServiceAccount = {
   project_id: string;
@@ -18,11 +18,11 @@ type ServiceAccount = {
   token_uri?: string;
 };
 
-type ClaimedDonation = {
+type Donation = {
   transaction_id: string;
   token: string;
   amount: number | string;
-  currency: string;
+  currency: string | null;
   donated_at: string;
   gclid: string | null;
   gbraid: string | null;
@@ -30,7 +30,7 @@ type ClaimedDonation = {
   attempt_count: number;
 };
 
-function json(body: unknown, status = 200) {
+function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
@@ -46,17 +46,18 @@ async function sha256(value: string) {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function constantTimeEqual(a: string, b: string) {
-  if (a.length !== b.length) return false;
+function constantTimeEqual(left: string, right: string) {
+  if (left.length !== right.length) return false;
   let difference = 0;
-  for (let i = 0; i < a.length; i += 1) difference |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  for (let i = 0; i < left.length; i += 1) {
+    difference |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  }
   return difference === 0;
 }
 
-async function authorized(req: Request) {
-  const supplied = req.headers.get("x-cron-secret") ?? "";
-  if (!supplied) return false;
-  return constantTimeEqual(await sha256(supplied), CRON_SECRET_SHA256);
+async function authorized(request: Request) {
+  const supplied = request.headers.get("x-cron-secret") ?? "";
+  return supplied.length > 0 && constantTimeEqual(await sha256(supplied), CRON_SECRET_SHA256);
 }
 
 function base64Url(input: Uint8Array | string) {
@@ -66,14 +67,28 @@ function base64Url(input: Uint8Array | string) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-function pemToBytes(pem: string) {
-  const base64 = pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s+/g, "");
-  const binary = atob(base64);
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+function privateKeyBytes(pem: string) {
+  const encoded = pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s+/g, "");
+  return Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
 }
 
-async function getAccessToken(serviceAccount: ServiceAccount) {
+function loadRuntime() {
+  const serviceAccountJson = Deno.env.get("GOOGLE_DATAMANAGER_SERVICE_ACCOUNT_JSON");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!serviceAccountJson) throw new Error("GOOGLE_DATAMANAGER_SERVICE_ACCOUNT_JSON is not configured");
+  if (!supabaseUrl || !serviceRoleKey) throw new Error("Supabase runtime configuration is missing");
+
+  const serviceAccount = JSON.parse(serviceAccountJson) as ServiceAccount;
+  if (!serviceAccount.project_id || !serviceAccount.client_email || !serviceAccount.private_key) {
+    throw new Error("Google service account JSON is incomplete");
+  }
+  return { serviceAccount, supabaseUrl, serviceRoleKey };
+}
+
+async function googleAccessToken(serviceAccount: ServiceAccount) {
   const issuedAt = Math.floor(Date.now() / 1000);
+  const tokenUri = serviceAccount.token_uri ?? "https://oauth2.googleapis.com/token";
   const header = base64Url(JSON.stringify({
     alg: "RS256",
     typ: "JWT",
@@ -82,14 +97,14 @@ async function getAccessToken(serviceAccount: ServiceAccount) {
   const claims = base64Url(JSON.stringify({
     iss: serviceAccount.client_email,
     scope: DATA_MANAGER_SCOPE,
-    aud: serviceAccount.token_uri ?? "https://oauth2.googleapis.com/token",
+    aud: tokenUri,
     iat: issuedAt,
     exp: issuedAt + 3600,
   }));
-  const unsigned = `${header}.${claims}`;
+  const unsignedJwt = `${header}.${claims}`;
   const key = await crypto.subtle.importKey(
     "pkcs8",
-    pemToBytes(serviceAccount.private_key),
+    privateKeyBytes(serviceAccount.private_key),
     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
     false,
     ["sign"],
@@ -97,11 +112,11 @@ async function getAccessToken(serviceAccount: ServiceAccount) {
   const signature = new Uint8Array(await crypto.subtle.sign(
     "RSASSA-PKCS1-v1_5",
     key,
-    new TextEncoder().encode(unsigned),
+    new TextEncoder().encode(unsignedJwt),
   ));
-  const assertion = `${unsigned}.${base64Url(signature)}`;
+  const assertion = `${unsignedJwt}.${base64Url(signature)}`;
 
-  const response = await fetch(serviceAccount.token_uri ?? "https://oauth2.googleapis.com/token", {
+  const tokenResponse = await fetch(tokenUri, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -109,41 +124,19 @@ async function getAccessToken(serviceAccount: ServiceAccount) {
       assertion,
     }),
   });
-  const payload = await response.json().catch(() => ({})) as JsonRecord;
-  if (!response.ok || typeof payload.access_token !== "string") {
-    throw new Error(`Google OAuth failed (${response.status}): ${JSON.stringify(payload).slice(0, 1000)}`);
+  const payload = await tokenResponse.json().catch(() => ({})) as JsonObject;
+  if (!tokenResponse.ok || typeof payload.access_token !== "string") {
+    throw new Error(`Google OAuth failed (${tokenResponse.status}): ${JSON.stringify(payload).slice(0, 1500)}`);
   }
   return payload.access_token;
 }
 
-function config() {
-  const raw = Deno.env.get("GOOGLE_DATAMANAGER_SERVICE_ACCOUNT_JSON");
-  if (!raw) throw new Error("GOOGLE_DATAMANAGER_SERVICE_ACCOUNT_JSON is not configured");
-  const serviceAccount = JSON.parse(raw) as ServiceAccount;
-  if (!serviceAccount.project_id || !serviceAccount.client_email || !serviceAccount.private_key) {
-    throw new Error("Google service account JSON is incomplete");
-  }
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceRoleKey) throw new Error("Supabase runtime configuration is missing");
-  return { serviceAccount, supabaseUrl, serviceRoleKey };
-}
-
-function restHeaders(serviceRoleKey: string) {
+function supabaseHeaders(serviceRoleKey: string) {
   return {
     apikey: serviceRoleKey,
     Authorization: `Bearer ${serviceRoleKey}`,
     "Content-Type": "application/json",
   };
-}
-
-function chooseIdentifiers(row: ClaimedDonation) {
-  const adIdentifiers: JsonRecord = {};
-  if (row.gclid) adIdentifiers.gclid = row.gclid;
-  if (row.gbraid) adIdentifiers.gbraid = row.gbraid;
-  if (row.wbraid) adIdentifiers.wbraid = row.wbraid;
-  const identifierType = row.gclid ? "gclid" : row.wbraid ? "wbraid" : row.gbraid ? "gbraid" : null;
-  return { adIdentifiers, identifierType };
 }
 
 function destination() {
@@ -152,6 +145,13 @@ function destination() {
     loginAccount: { accountType: "GOOGLE_ADS", accountId: LOGIN_ACCOUNT_ID },
     productDestinationId: CONVERSION_ACTION_ID,
   };
+}
+
+function clickIdentifier(donation: Donation) {
+  if (donation.gclid) return { adIdentifiers: { gclid: donation.gclid }, type: "gclid" };
+  if (donation.wbraid) return { adIdentifiers: { wbraid: donation.wbraid }, type: "wbraid" };
+  if (donation.gbraid) return { adIdentifiers: { gbraid: donation.gbraid }, type: "gbraid" };
+  throw new Error("No Google click identifier is available");
 }
 
 async function googleRequest(
@@ -175,21 +175,18 @@ async function patchDonation(
   supabaseUrl: string,
   serviceRoleKey: string,
   transactionId: string,
-  values: JsonRecord,
+  values: JsonObject,
 ) {
   const url = new URL(`${supabaseUrl}/rest/v1/givebutter_donations`);
   url.searchParams.set("transaction_id", `eq.${transactionId}`);
-  const response = await fetch(url, {
+  const patchResponse = await fetch(url, {
     method: "PATCH",
-    headers: { ...restHeaders(serviceRoleKey), Prefer: "return=minimal" },
+    headers: { ...supabaseHeaders(serviceRoleKey), Prefer: "return=minimal" },
     body: JSON.stringify(values),
   });
-  if (!response.ok) throw new Error(`Donation update failed (${response.status})`);
-}
-
-function retryAt(attempt: number) {
-  const minutes = Math.min(60 * 24, Math.max(15, 15 * (2 ** Math.max(0, attempt - 1))));
-  return new Date(Date.now() + minutes * 60 * 1000).toISOString();
+  if (!patchResponse.ok) {
+    throw new Error(`Donation state update failed (${patchResponse.status})`);
+  }
 }
 
 async function claimDonations(
@@ -197,80 +194,83 @@ async function claimDonations(
   serviceRoleKey: string,
   limit: number,
 ) {
-  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/claim_google_ads_donations`, {
+  const claimResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/claim_google_ads_donations`, {
     method: "POST",
-    headers: restHeaders(serviceRoleKey),
+    headers: supabaseHeaders(serviceRoleKey),
     body: JSON.stringify({ p_limit: limit }),
   });
-  if (!response.ok) {
-    throw new Error(`Donation claim failed (${response.status}): ${await response.text().catch(() => "")}`);
+  if (!claimResponse.ok) {
+    throw new Error(`Donation claim failed (${claimResponse.status}): ${await claimResponse.text().catch(() => "")}`);
   }
-  return await response.json() as ClaimedDonation[];
+  return await claimResponse.json() as Donation[];
 }
 
-async function ingestDonation(
-  row: ClaimedDonation,
+function nextRetry(attempt: number) {
+  const minutes = Math.min(1440, 15 * (2 ** Math.max(0, attempt - 1)));
+  return new Date(Date.now() + minutes * 60 * 1000).toISOString();
+}
+
+async function ingest(
+  donation: Donation,
   accessToken: string,
   serviceAccount: ServiceAccount,
   validateOnly: boolean,
 ) {
-  const { adIdentifiers, identifierType } = chooseIdentifiers(row);
-  if (!identifierType) throw new Error("No Google click identifier is available");
-  const amount = Number(row.amount);
-  const timestamp = new Date(row.donated_at);
+  const identifier = clickIdentifier(donation);
+  const amount = Number(donation.amount);
+  const donatedAt = new Date(donation.donated_at);
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Donation amount is invalid");
-  if (!Number.isFinite(timestamp.getTime())) throw new Error("Donation timestamp is invalid");
+  if (!Number.isFinite(donatedAt.getTime())) throw new Error("Donation timestamp is invalid");
 
-  const requestBody = {
+  const body = {
     destinations: [destination()],
-    encoding: "HEX",
     validateOnly,
     events: [{
-      adIdentifiers,
+      adIdentifiers: identifier.adIdentifiers,
       conversionValue: amount,
-      currency: String(row.currency ?? "USD").toUpperCase(),
-      eventTimestamp: timestamp.toISOString(),
-      transactionId: row.transaction_id,
+      currency: String(donation.currency ?? "USD").toUpperCase(),
+      eventTimestamp: donatedAt.toISOString(),
+      transactionId: donation.transaction_id,
       eventSource: "WEB",
     }],
   };
-  const response = await googleRequest(
-    DATA_MANAGER_INGEST_URL,
+  const ingestResponse = await googleRequest(
+    INGEST_URL,
     accessToken,
     serviceAccount.project_id,
-    { method: "POST", body: JSON.stringify(requestBody) },
+    { method: "POST", body: JSON.stringify(body) },
   );
-  const payload = await response.json().catch(() => ({})) as JsonRecord;
-  return { response, payload, identifierType };
+  const payload = await ingestResponse.json().catch(() => ({})) as JsonObject;
+  return { ingestResponse, payload, identifierType: identifier.type };
 }
 
-async function processDiagnostics(
+async function diagnostics(
   supabaseUrl: string,
   serviceRoleKey: string,
   accessToken: string,
   serviceAccount: ServiceAccount,
   limit: number,
 ) {
-  const cutoff = new Date(Date.now() - FIRST_DIAGNOSTIC_DELAY_MINUTES * 60 * 1000).toISOString();
-  const url = new URL(`${supabaseUrl}/rest/v1/givebutter_donations`);
-  url.searchParams.set("select", "transaction_id,ads_request_id,ads_attempt_count,ads_diagnostics_checked_at");
-  url.searchParams.set("ads_upload_status", "eq.processing");
-  url.searchParams.set("ads_request_id", "not.is.null");
-  url.searchParams.set("ads_last_attempt_at", `lte.${cutoff}`);
-  url.searchParams.set("order", "ads_last_attempt_at.asc");
-  url.searchParams.set("limit", String(limit));
-  const response = await fetch(url, { headers: restHeaders(serviceRoleKey) });
-  if (!response.ok) throw new Error(`Diagnostics queue query failed (${response.status})`);
-  const rows = await response.json() as Array<{
+  const cutoff = new Date(Date.now() - DIAGNOSTIC_DELAY_MINUTES * 60 * 1000).toISOString();
+  const queueUrl = new URL(`${supabaseUrl}/rest/v1/givebutter_donations`);
+  queueUrl.searchParams.set("select", "transaction_id,ads_request_id,ads_attempt_count");
+  queueUrl.searchParams.set("ads_upload_status", "eq.processing");
+  queueUrl.searchParams.set("ads_request_id", "not.is.null");
+  queueUrl.searchParams.set("ads_last_attempt_at", `lte.${cutoff}`);
+  queueUrl.searchParams.set("order", "ads_last_attempt_at.asc");
+  queueUrl.searchParams.set("limit", String(limit));
+
+  const queueResponse = await fetch(queueUrl, { headers: supabaseHeaders(serviceRoleKey) });
+  if (!queueResponse.ok) throw new Error(`Diagnostics queue failed (${queueResponse.status})`);
+  const rows = await queueResponse.json() as Array<{
     transaction_id: string;
     ads_request_id: string;
     ads_attempt_count: number;
-    ads_diagnostics_checked_at: string | null;
   }>;
 
-  const outcomes: JsonRecord[] = [];
+  const results: JsonObject[] = [];
   for (const row of rows) {
-    const statusUrl = new URL(DATA_MANAGER_STATUS_URL);
+    const statusUrl = new URL(STATUS_URL);
     statusUrl.searchParams.set("requestId", row.ads_request_id);
     const statusResponse = await googleRequest(
       statusUrl.toString(),
@@ -278,104 +278,106 @@ async function processDiagnostics(
       serviceAccount.project_id,
       { method: "GET" },
     );
-    const payload = await statusResponse.json().catch(() => ({})) as JsonRecord;
+    const payload = await statusResponse.json().catch(() => ({})) as JsonObject;
+    const perDestination = Array.isArray(payload.requestStatusPerDestination)
+      ? payload.requestStatusPerDestination as JsonObject[]
+      : [];
+    const requestStatus = String(perDestination[0]?.requestStatus ?? "PROCESSING");
+
     if (!statusResponse.ok) {
-      const retryable = statusResponse.status === 429 || statusResponse.status >= 500;
+      const transient = statusResponse.status === 429 || statusResponse.status >= 500;
       await patchDonation(supabaseUrl, serviceRoleKey, row.transaction_id, {
-        ads_upload_status: retryable ? "processing" : "failed",
+        ads_upload_status: transient ? "processing" : "failed",
         ads_diagnostics_checked_at: new Date().toISOString(),
         ads_upload_error: JSON.stringify(payload).slice(0, 4000),
         ads_upload_details: payload,
       });
-      outcomes.push({ transactionId: row.transaction_id, httpStatus: statusResponse.status, retryable });
+      results.push({ transactionId: row.transaction_id, httpStatus: statusResponse.status, transient });
       continue;
     }
 
-    const perDestination = Array.isArray(payload.requestStatusPerDestination)
-      ? payload.requestStatusPerDestination as JsonRecord[]
-      : [];
-    const requestStatus = String(perDestination[0]?.requestStatus ?? "PROCESSING");
-    const terminal = ["SUCCESS", "FAILED", "PARTIAL_SUCCESS"].includes(requestStatus);
+    const succeeded = requestStatus === "SUCCESS";
+    const partial = requestStatus === "PARTIAL_SUCCESS";
+    const failed = requestStatus === "FAILED";
     await patchDonation(supabaseUrl, serviceRoleKey, row.transaction_id, {
-      ads_upload_status: requestStatus === "SUCCESS"
-        ? "succeeded"
-        : requestStatus === "PARTIAL_SUCCESS"
-        ? "partial_success"
-        : requestStatus === "FAILED"
-        ? "failed"
-        : "processing",
+      ads_upload_status: succeeded ? "succeeded" : partial ? "partial_success" : failed ? "failed" : "processing",
       ads_diagnostics_checked_at: new Date().toISOString(),
-      ads_uploaded_at: requestStatus === "SUCCESS" ? new Date().toISOString() : null,
-      ads_upload_error: requestStatus === "FAILED" || requestStatus === "PARTIAL_SUCCESS"
-        ? JSON.stringify(payload).slice(0, 4000)
-        : null,
+      ads_uploaded_at: succeeded ? new Date().toISOString() : null,
+      ads_upload_error: partial || failed ? JSON.stringify(payload).slice(0, 4000) : null,
       ads_upload_details: payload,
-      ...(terminal ? { ads_next_attempt_at: null } : {}),
     });
-    outcomes.push({ transactionId: row.transaction_id, requestStatus });
+    results.push({ transactionId: row.transaction_id, requestStatus });
   }
-  return outcomes;
+  return results;
 }
 
-Deno.serve(async (req: Request) => {
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
-  if (!(await authorized(req))) return json({ error: "Unauthorized" }, 401);
+Deno.serve(async (request: Request) => {
+  if (request.method !== "POST") return response({ error: "Method not allowed" }, 405);
+  if (!(await authorized(request))) return response({ error: "Unauthorized" }, 401);
 
-  let runtime;
+  let runtime: ReturnType<typeof loadRuntime>;
   try {
-    runtime = config();
+    runtime = loadRuntime();
   } catch (error) {
-    return json({ configured: false, error: error instanceof Error ? error.message : String(error) }, 503);
+    return response({ configured: false, error: error instanceof Error ? error.message : String(error) }, 503);
   }
 
-  const body = await req.json().catch(() => ({})) as JsonRecord;
-  const mode = body.mode === "validate" || body.mode === "diagnostics" ? body.mode : "run";
-  const limit = Math.max(1, Math.min(Number(body.limit ?? 10) || 10, 50));
+  const input = await request.json().catch(() => ({})) as JsonObject;
+  const mode = input.mode === "validate" || input.mode === "diagnostics" ? input.mode : "run";
+  const limit = Math.max(1, Math.min(Number(input.limit ?? 10) || 10, 50));
 
   try {
-    const accessToken = await getAccessToken(runtime.serviceAccount);
-
+    const accessToken = await googleAccessToken(runtime.serviceAccount);
     if (mode === "diagnostics") {
-      const diagnostics = await processDiagnostics(
-        runtime.supabaseUrl,
-        runtime.serviceRoleKey,
-        accessToken,
-        runtime.serviceAccount,
-        limit,
-      );
-      return json({ ok: true, mode, diagnostics });
+      return response({
+        ok: true,
+        mode,
+        results: await diagnostics(
+          runtime.supabaseUrl,
+          runtime.serviceRoleKey,
+          accessToken,
+          runtime.serviceAccount,
+          limit,
+        ),
+      });
     }
 
-    const claimed = await claimDonations(runtime.supabaseUrl, runtime.serviceRoleKey, limit);
-    if (!claimed.length) {
-      return json({ ok: true, mode, claimed: 0, message: "No eligible attributable donations" });
+    const donations = await claimDonations(runtime.supabaseUrl, runtime.serviceRoleKey, limit);
+    if (donations.length === 0) {
+      return response({ ok: true, mode, claimed: 0, message: "No eligible attributable donations" });
     }
 
-    const results: JsonRecord[] = [];
-    for (const row of claimed) {
+    const results: JsonObject[] = [];
+    for (const donation of donations) {
       try {
-        const { response, payload, identifierType } = await ingestDonation(
-          row,
+        const { ingestResponse, payload, identifierType } = await ingest(
+          donation,
           accessToken,
           runtime.serviceAccount,
           mode === "validate",
         );
+
         if (mode === "validate") {
-          await patchDonation(runtime.supabaseUrl, runtime.serviceRoleKey, row.transaction_id, {
+          await patchDonation(runtime.supabaseUrl, runtime.serviceRoleKey, donation.transaction_id, {
             ads_upload_status: "pending",
-            ads_attempt_count: Math.max(0, Number(row.attempt_count) - 1),
+            ads_attempt_count: Math.max(0, Number(donation.attempt_count) - 1),
             ads_last_attempt_at: null,
-            ads_upload_error: response.ok ? null : JSON.stringify(payload).slice(0, 4000),
-            ads_upload_details: { validateOnly: true, httpStatus: response.status, response: payload },
-            ads_identifier_type: identifierType,
             ads_next_attempt_at: null,
+            ads_identifier_type: identifierType,
+            ads_upload_error: ingestResponse.ok ? null : JSON.stringify(payload).slice(0, 4000),
+            ads_upload_details: { validateOnly: true, httpStatus: ingestResponse.status, response: payload },
           });
-          results.push({ transactionId: row.transaction_id, valid: response.ok, httpStatus: response.status, response: payload });
+          results.push({
+            transactionId: donation.transaction_id,
+            valid: ingestResponse.ok,
+            httpStatus: ingestResponse.status,
+            response: payload,
+          });
           continue;
         }
 
-        if (response.ok && typeof payload.requestId === "string") {
-          await patchDonation(runtime.supabaseUrl, runtime.serviceRoleKey, row.transaction_id, {
+        if (ingestResponse.ok && typeof payload.requestId === "string") {
+          await patchDonation(runtime.supabaseUrl, runtime.serviceRoleKey, donation.transaction_id, {
             ads_upload_status: "processing",
             ads_request_id: payload.requestId,
             ads_identifier_type: identifierType,
@@ -383,44 +385,41 @@ Deno.serve(async (req: Request) => {
             ads_upload_details: { ingest: payload },
             ads_next_attempt_at: null,
           });
-          results.push({ transactionId: row.transaction_id, accepted: true, requestId: payload.requestId });
-        } else {
-          const retryable = response.status === 429 || response.status >= 500;
-          const exhausted = row.attempt_count >= MAX_ATTEMPTS;
-          await patchDonation(runtime.supabaseUrl, runtime.serviceRoleKey, row.transaction_id, {
-            ads_upload_status: retryable && !exhausted ? "retry" : "failed",
-            ads_identifier_type: identifierType,
-            ads_upload_error: JSON.stringify(payload).slice(0, 4000),
-            ads_upload_details: { httpStatus: response.status, response: payload },
-            ads_next_attempt_at: retryable && !exhausted ? retryAt(row.attempt_count) : null,
-          });
-          results.push({ transactionId: row.transaction_id, accepted: false, httpStatus: response.status, retryable: retryable && !exhausted });
+          results.push({ transactionId: donation.transaction_id, accepted: true, requestId: payload.requestId });
+          continue;
         }
+
+        const transient = ingestResponse.status === 429 || ingestResponse.status >= 500;
+        const exhausted = Number(donation.attempt_count) >= MAX_ATTEMPTS;
+        await patchDonation(runtime.supabaseUrl, runtime.serviceRoleKey, donation.transaction_id, {
+          ads_upload_status: transient && !exhausted ? "retry" : "failed",
+          ads_identifier_type: identifierType,
+          ads_upload_error: JSON.stringify(payload).slice(0, 4000),
+          ads_upload_details: { httpStatus: ingestResponse.status, response: payload },
+          ads_next_attempt_at: transient && !exhausted ? nextRetry(Number(donation.attempt_count)) : null,
+        });
+        results.push({
+          transactionId: donation.transaction_id,
+          accepted: false,
+          httpStatus: ingestResponse.status,
+          retryable: transient && !exhausted,
+          response: payload,
+        });
       } catch (error) {
-        const exhausted = row.attempt_count >= MAX_ATTEMPTS;
+        const exhausted = Number(donation.attempt_count) >= MAX_ATTEMPTS;
         const message = error instanceof Error ? error.message : String(error);
-        await patchDonation(runtime.supabaseUrl, runtime.serviceRoleKey, row.transaction_id, {
+        await patchDonation(runtime.supabaseUrl, runtime.serviceRoleKey, donation.transaction_id, {
           ads_upload_status: exhausted ? "failed" : "retry",
           ads_upload_error: message.slice(0, 4000),
           ads_upload_details: { exception: message },
-          ads_next_attempt_at: exhausted ? null : retryAt(row.attempt_count),
+          ads_next_attempt_at: exhausted ? null : nextRetry(Number(donation.attempt_count)),
         });
-        results.push({ transactionId: row.transaction_id, accepted: false, exception: message });
+        results.push({ transactionId: donation.transaction_id, accepted: false, exception: message });
       }
     }
 
-    const diagnostics = mode === "run"
-      ? await processDiagnostics(
-        runtime.supabaseUrl,
-        runtime.serviceRoleKey,
-        accessToken,
-        runtime.serviceAccount,
-        limit,
-      )
-      : [];
-
-    return json({ ok: true, mode, claimed: claimed.length, results, diagnostics });
+    return response({ ok: true, mode, claimed: donations.length, results });
   } catch (error) {
-    return json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 500);
+    return response({ ok: false, error: error instanceof Error ? error.message : String(error) }, 500);
   }
 });
