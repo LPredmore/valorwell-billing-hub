@@ -3,7 +3,7 @@ const EXPECTED_PASS_SHA256 = "c57b3b725ca30e503aefd8548ae79ee6c73baa2af13178e50e
 const CONVERSION_ACTION = "Givebutter Donation";
 const MAX_CLICK_AGE_DAYS = 90;
 const MINIMUM_AGE_HOURS = 6;
-const SCHEMA_SENTINEL_GCLID = "SCHEMA_ONLY_DO_NOT_IMPORT";
+const SCHEMA_SENTINEL_GCLID = "EAIaIQobChMI0000000000000000000000000000000000000000000000000000000000000000000000000000";
 const SCHEMA_SENTINEL_ORDER_ID = "__schema_bootstrap__";
 
 type DonationRow = {
@@ -110,11 +110,11 @@ Deno.serve(async (req: Request) => {
   const donations = await donationRes.json() as DonationRow[];
 
   // Google Ads Data Manager cannot discover a header-only HTTPS CSV. Keep one
-  // permanent schema bootstrap row so the connection remains selectable before
-  // the first attributable donation. Consumers must filter record_type to
-  // "conversion". The sentinel is also intentionally invalid, zero-valued, and
-  // older than the attribution window so it cannot become a real conversion if
-  // a filter is accidentally omitted.
+  // structurally valid schema row so the connection remains selectable before
+  // the first attributable donation. Consumers filter record_type to
+  // "conversion". The sentinel GCLID is synthetic and cannot match a real ad
+  // click, so it remains non-importable even if the filter is omitted.
+  const schemaTimestamp = new Date(Date.now() - (MINIMUM_AGE_HOURS + 1) * 60 * 60 * 1000).toISOString();
   const lines = [
     "record_type,gclid,gbraid,wbraid,conversion_action,conversion_date_time,conversion_value,currency_code,order_id",
     csvLine([
@@ -123,8 +123,8 @@ Deno.serve(async (req: Request) => {
       "",
       "",
       CONVERSION_ACTION,
-      "2000-01-01T00:00:00Z",
-      "0.00",
+      schemaTimestamp,
+      "1.00",
       "USD",
       SCHEMA_SENTINEL_ORDER_ID,
     ]),
