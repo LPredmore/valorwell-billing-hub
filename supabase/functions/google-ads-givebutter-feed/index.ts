@@ -4,7 +4,7 @@ const MAX_CLICK_AGE_DAYS = 90;
 const MINIMUM_AGE_HOURS = 6;
 const SCHEMA_SENTINEL_GCLID = "EAIaIQobChMI0000000000000000000000000000000000000000000000000000000000000000000000000000";
 const SCHEMA_SENTINEL_ORDER_ID = "__schema_bootstrap__";
-const CSV_HEADER = "record_type,GCLID,GBRAID,WBRAID,Conversion date and time,Conversion value,Currency code,Transaction ID";
+const CSV_HEADER = "record_type,Event source,GCLID,GBRAID,WBRAID,Conversion date and time,Conversion value,Currency code,Transaction ID";
 
 type DonationRow = {
   transaction_id: string;
@@ -119,6 +119,7 @@ Deno.serve(async (req: Request) => {
     CSV_HEADER,
     csvLine([
       "schema",
+      "WEB",
       SCHEMA_SENTINEL_GCLID,
       "",
       "",
@@ -157,6 +158,7 @@ Deno.serve(async (req: Request) => {
 
     lines.push(csvLine([
       "conversion",
+      "WEB",
       attribution.gclid ?? "",
       attribution.gbraid ?? "",
       attribution.wbraid ?? "",
