@@ -1,10 +1,10 @@
 const EXPECTED_USER_SHA256 = "1b1777f65aa4eee57c76d02e4abb51db5fa5985161d27242c7adc2683e33a44e";
 const EXPECTED_PASS_SHA256 = "c57b3b725ca30e503aefd8548ae79ee6c73baa2af13178e50e973daa71be0fbb";
-const CONVERSION_ACTION = "Givebutter Donation";
 const MAX_CLICK_AGE_DAYS = 90;
 const MINIMUM_AGE_HOURS = 6;
 const SCHEMA_SENTINEL_GCLID = "EAIaIQobChMI0000000000000000000000000000000000000000000000000000000000000000000000000000";
 const SCHEMA_SENTINEL_ORDER_ID = "__schema_bootstrap__";
+const CSV_HEADER = "record_type,GCLID,GBRAID,WBRAID,Conversion date and time,Conversion value,Currency code,Transaction ID";
 
 type DonationRow = {
   transaction_id: string;
@@ -109,20 +109,19 @@ Deno.serve(async (req: Request) => {
   }
   const donations = await donationRes.json() as DonationRow[];
 
-  // Google Ads Data Manager cannot discover a header-only HTTPS CSV. Keep one
-  // structurally valid schema row so the connection remains selectable before
-  // the first attributable donation. Consumers filter record_type to
-  // "conversion". The sentinel GCLID is synthetic and cannot match a real ad
-  // click, so it remains non-importable even if the filter is omitted.
+  // Data Manager maps exact destination names more reliably than application-style
+  // identifiers. Keep one structurally valid bootstrap row so a new HTTPS
+  // connection can discover the schema before the first attributable donation.
+  // Consumers filter record_type to "conversion". The synthetic GCLID cannot
+  // match a real ad click even if the filter is accidentally omitted.
   const schemaTimestamp = new Date(Date.now() - (MINIMUM_AGE_HOURS + 1) * 60 * 60 * 1000).toISOString();
   const lines = [
-    "record_type,gclid,gbraid,wbraid,conversion_action,conversion_date_time,conversion_value,currency_code,order_id",
+    CSV_HEADER,
     csvLine([
       "schema",
       SCHEMA_SENTINEL_GCLID,
       "",
       "",
-      CONVERSION_ACTION,
       schemaTimestamp,
       "1.00",
       "USD",
@@ -161,7 +160,6 @@ Deno.serve(async (req: Request) => {
       attribution.gclid ?? "",
       attribution.gbraid ?? "",
       attribution.wbraid ?? "",
-      CONVERSION_ACTION,
       new Date(timestamp).toISOString(),
       amount.toFixed(2),
       String(donation.currency ?? "USD").toUpperCase(),
