@@ -2,7 +2,7 @@
 
 Production project: `ahqauomkgflopxgnlndd` (Billing Hub)
 
-Deployed on August 6, 2026. The SQL stored in `supabase_migrations.schema_migrations.statements` is the authoritative record of what ran. Do not reconstruct these migrations from application code or deploy the retired Therapist CRM backend.
+Deployed August 6–7, 2026. The SQL stored in `supabase_migrations.schema_migrations.statements` is the authoritative record of what ran. Do not reconstruct these migrations from application code or deploy the retired Therapist CRM backend.
 
 ## Applied migration inventory
 
@@ -11,17 +11,23 @@ Deployed on August 6, 2026. The SQL stored in `supabase_migrations.schema_migrat
 | `20260806203440` | `therapist_match_authority_schema` | Match and event tables, relationship provenance, outbox claim/result boundary |
 | `20260806203612` | `therapist_match_authority_request_and_activation` | Transactional match request and relationship activation |
 | `20260806203727` | `therapist_match_authority_commands_and_context` | Accept, decline, cancel, first booking, client-safe authority context |
-| `20260806203818` | `therapist_match_authority_workers_and_projection` | Expiration cron, outbox launcher, projection bypass |
+| `20260806203818` | `therapist_match_authority_workers_and_projection` | Expiration cron, outbox launcher, projection controls |
 | `20260806205541` | `client_portal_support_requests` | Auditable client support requests and CRM tasks |
 | `20260806205616` | `fix_client_portal_support_due_interval` | Correct support-task due interval |
 | `20260806210703` | `therapist_match_staff_review_contracts` | Role-scoped clinician queue and administrator reconciliation commands |
 | `20260806211144` | `therapist_authority_action_contract_and_message_rls` | Action-contract authority overlay and confirmed-relationship message RLS |
 | `20260806211404` | `legacy_relationship_containment_commands` | Idempotent preview/apply commands for the backfilled cohort |
 | `20260806211506` | `tighten_legacy_current_care_evidence` | Require actual current clinical activity for automatic confirmation |
+| `20260806212718` | `fix_legacy_containment_state_engine_context` | Align containment with canonical state-engine controls |
+| `20260806213046` | `fix_legacy_review_state_engine_context` | Align manual legacy decisions with canonical state-engine controls |
+| `20260806213818` | `fix_message_policy_admin_helper_execute` | Correct message-policy helper execution privileges |
+| `20260807041049` | `normalize_legacy_review_client_lifecycle` | Add a locked administrative lifecycle normalization command |
+| `20260807041216` | `apply_legacy_review_lifecycle_normalization_v4` | Normalize unresolved legacy reviews to readiness-derived intake/matching state |
+| `20260807041848` | `create_legacy_relationship_reconciliation_tasks` | Create owned review tasks and complete them automatically after a decision |
 
 ## Domain authority
 
-- `client_therapist_matches` owns selection, reservation, clinician acceptance, expiration, and first-booking workflow.
+- `client_therapist_matches` owns selection, capacity reservation, clinician acceptance, expiration, and first-booking workflow.
 - `client_staff_relationships` owns confirmed or historical care relationships.
 - `clients.primary_staff_id` is a compatibility projection only.
 - Direct therapist messaging requires an active `primary_therapist` relationship with `confirmation_state = 'confirmed'`.
@@ -31,22 +37,40 @@ Deployed on August 6, 2026. The SQL stored in `supabase_migrations.schema_migrat
 
 ## Runtime components
 
-- `therapist-match-outbox-worker`: sends clinician operational notifications only.
+- `therapist-match-outbox-worker`: clinician operational notifications only.
 - `book-client-appointment`: dispatches pending-first-appointment bookings to the atomic activation RPC.
-- Cron `expire-therapist-matches`: every five minutes.
-- Cron `therapist-match-outbox-worker`: every minute.
+- Cron job 28 expires pending therapist matches every five minutes.
+- Cron job 29 invokes the match outbox worker every minute.
 
-## Legacy cohort status
+## Legacy cohort cutover
 
-The containment command is deliberately separate from schema deployment.
+The containment command was executed on August 6, 2026.
 
-Validated dry-run classification:
+Initial classification:
 
-- 8 strong-current-care relationships
-- 7 historical-care relationships requiring manual review
-- 43 relationships with no care evidence
+- 8 relationships confirmed from strong current-care evidence
+- 50 relationships placed into `legacy_review`
 
-Do not invoke `admin_apply_legacy_relationship_containment` until both the client and staff application changes are deployed and verified.
+The 50 unresolved relationships were subsequently normalized so that their client lifecycle reflects current readiness rather than the old therapist identifier:
+
+- 50 clients are in `intake`
+- 0 legacy-review clients remain in `matched`, `scheduled`, `early_care`, or `established_care`
+- 0 legacy-review clients have direct therapist messaging authority
+- each unresolved relationship has exactly one assigned high-priority CRM review task
+
+No historical message, appointment, note, treatment-plan, or relationship record was deleted. The remaining 50 decisions require documented human review through the staff or CRM reconciliation workspace; they must not be bulk-confirmed or bulk-rejected.
+
+## Production integrity checks
+
+Validated after cutover:
+
+- no client has multiple active confirmed primary relationships
+- no client has multiple nonterminal therapist matches
+- no `primary_staff_id` projection exists without a matching confirmed relationship
+- no confirmed relationship disagrees with the client projection
+- no expired pending match remains nonterminal
+- no match outbox row is stale or dead-lettered
+- all 50 unresolved reviews have exactly one operational task
 
 ## Exporting exact applied SQL
 
