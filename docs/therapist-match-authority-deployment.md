@@ -24,6 +24,8 @@ Deployed August 6–7, 2026. The SQL stored in `supabase_migrations.schema_migra
 | `20260807041049` | `normalize_legacy_review_client_lifecycle` | Add a locked administrative lifecycle normalization command |
 | `20260807041216` | `apply_legacy_review_lifecycle_normalization_v4` | Normalize unresolved legacy reviews to readiness-derived intake/matching state |
 | `20260807041848` | `create_legacy_relationship_reconciliation_tasks` | Create owned review tasks and complete them automatically after a decision |
+| `20260807042927` | `retire_interactive_legacy_containment_commands` | Restrict completed one-time containment operations to service role only |
+| `20260807043112` | `index_therapist_match_authority_foreign_keys` | Add targeted relationship and match-event FK indexes |
 
 ## Domain authority
 
@@ -51,7 +53,7 @@ Initial classification:
 - 8 relationships confirmed from strong current-care evidence
 - 50 relationships placed into `legacy_review`
 
-The 50 unresolved relationships were subsequently normalized so that their client lifecycle reflects current readiness rather than the old therapist identifier:
+The 50 unresolved relationships were subsequently normalized so their client lifecycle reflects current readiness rather than the old therapist identifier:
 
 - 50 clients are in `intake`
 - 0 legacy-review clients remain in `matched`, `scheduled`, `early_care`, or `established_care`
@@ -59,6 +61,14 @@ The 50 unresolved relationships were subsequently normalized so that their clien
 - each unresolved relationship has exactly one assigned high-priority CRM review task
 
 No historical message, appointment, note, treatment-plan, or relationship record was deleted. The remaining 50 decisions require documented human review through the staff or CRM reconciliation workspace; they must not be bulk-confirmed or bulk-rejected.
+
+## Security and performance boundary
+
+- Match, match-event, support-request, and integration-outbox tables have no direct `anon` or general `authenticated` CRUD privileges.
+- One-time containment and normalization commands are service-role only after cutover.
+- Ongoing confirm/reject actions remain behind staff/admin authorization and optimistic concurrency.
+- Targeted indexes cover relationship lookup by match and first appointment, plus event lookup by client and staff.
+- Project-wide legacy Supabase advisor findings remain outside this release and must not be represented as resolved by this work.
 
 ## Production integrity checks
 
@@ -68,9 +78,18 @@ Validated after cutover:
 - no client has multiple nonterminal therapist matches
 - no `primary_staff_id` projection exists without a matching confirmed relationship
 - no confirmed relationship disagrees with the client projection
+- no legacy-review client has therapist messaging authority
+- no legacy-review client remains in an active-care lifecycle stage
 - no expired pending match remains nonterminal
 - no match outbox row is stale or dead-lettered
 - all 50 unresolved reviews have exactly one operational task
+
+## Application release state
+
+- Client Portal therapist-authority changes are merged to `valorwell-clients/main`.
+- Staff therapist-match workspace is merged to `valorwell-staff/main`.
+- CRM reconciliation workspace is merged to `valorwell-crm/main` and passed lint, TypeScript, tests, and production build checks.
+- These Lovable-hosted applications require an external Share → Publish action; a GitHub merge alone does not prove the custom domains are serving the merged build.
 
 ## Exporting exact applied SQL
 
