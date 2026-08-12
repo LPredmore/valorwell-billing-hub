@@ -13,5 +13,7 @@ comment on table public.legacy_therapist_crm_archive is
   'Read-only retirement archive of non-canonical business records from Supabase project asjhkidpuhqodryczuth. Password and secret fields are excluded during import.';
 
 alter table public.legacy_therapist_crm_archive enable row level security;
+
 revoke all on table public.legacy_therapist_crm_archive from anon, authenticated;
+
 grant select, insert, update, delete on table public.legacy_therapist_crm_archive to service_role;
