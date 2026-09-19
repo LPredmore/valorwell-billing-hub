@@ -1,6 +1,6 @@
--- Resource Platform v2 hardening:
--- expose only a public-safe projection of published resources and remove direct
--- anonymous/authenticated access to the canonical website_resources table.
+-- Resource Platform v2 hardening.
+-- This migration must be coordinated with the website release that switches
+-- public reads from website_resources to website_resources_public.
 
 create or replace function public.is_public_website_resource(
   p_tenant_id uuid,
@@ -25,7 +25,9 @@ revoke all on function public.is_public_website_resource(uuid, uuid) from public
 grant execute on function public.is_public_website_resource(uuid, uuid)
   to anon, authenticated;
 
-create or replace view public.website_resources_public
+drop view if exists public.website_resources_public;
+
+create view public.website_resources_public
 with (security_barrier = true)
 as
 select
@@ -55,8 +57,12 @@ where wr.tenant_id = '00000000-0000-0000-0000-000000000001'::uuid
   and wr.status = 'published';
 
 revoke all on public.website_resources_public from public;
+revoke all on public.website_resources_public from anon, authenticated;
 grant select on public.website_resources_public to anon, authenticated;
 
+-- Once the website has switched to the public-safe projection, anonymous and
+-- authenticated clients no longer need direct access to internal research
+-- fields on the canonical table.
 revoke select on public.website_resources from anon, authenticated;
 
 drop policy if exists website_resource_sources_public_read
